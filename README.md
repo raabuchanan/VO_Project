@@ -1,0 +1,1 @@
+Visual Odometry project for Vision Algorithms for Mobile Robotics
