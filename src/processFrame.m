@@ -136,6 +136,12 @@ else
     t_C_W = M_C_W(:, end);
 end
 
+%% Output
+
+currState = [flipud(matchedCurrKeypoints); p_W_landmarks(:, matches > 0)];
+
+currPose = [R_C_W, t_C_W];
+
 
 end
 
