@@ -1,0 +1,65 @@
+function [ currState, currPose ] = processFrame( prevState, prevImage, currImage )
+
+global harris_patch_size;
+global harris_kappa;
+global num_keypoints;
+global nonmaximum_supression_radius;
+global descriptor_radius;
+global match_lambda;
+global use_p3p;
+
+%% P3P or DLT
+if use_p3p
+    num_iterations = 200;
+    pixel_tolerance = 10;
+    k = 3;
+else
+    num_iterations = 2000;
+    pixel_tolerance = 10;
+    k = 6;
+end
+
+%% For testing, get state from prevImage
+if (prevState == 0)
+    
+    % Calculate Harris scores
+    testHarrisScores = harris(prevImage, harris_patch_size, harris_kappa);
+    assert(min(size(testHarrisScores) == size(prevImage)));
+    % Select keypoints
+    prevState = selectKeypoints(...
+        testHarrisScores, num_keypoints, nonmaximum_supression_radius);
+end
+
+%% Process prevImage
+
+prevKeypoints = prevState();
+p_W_landmarks = prevState(,:);
+
+prevDescriptors = describeKeypoints(prevImage, prevKeypoints, descriptor_radius);
+
+%% Process currImage
+% Calculate Harris scores
+currHarrisScores = harris(currImage, harris_patch_size, harris_kappa);
+assert(min(size(currHarrisScores) == size(currImage)));
+
+% Select keypoints
+currKeypoints = selectKeypoints(...
+    currHarrisScores, num_keypoints, nonmaximum_supression_radius);
+
+% Get Descriptors
+currDescriptors = describeKeypoints(currImage, currKeypoints, descriptor_radius);
+
+% Match Descriptors
+matches = matchDescriptors( currDescriptors, prevDescriptors, match_lambda);
+
+matchedCurrKeypoints = currKeypoints(:, matches > 0);
+matchesIndex = matches(matches > 0);
+correspondingLandmarks = p_W_landmarks(:, matchesIndex);
+
+% Only update Keypoints that where matched
+[~,~,v] = find(matches);
+currState = currKeypoints(:,v);
+currPose = 0;%for now
+
+end
+

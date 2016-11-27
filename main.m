@@ -4,6 +4,8 @@ clc
 
 addpath(genpath('src'));
 
+parameters;
+
 %% Setup
 parking_path = 'data/parking';
 ds = 2; % 0: KITTI, 1: Malaga, 2: parking
@@ -42,7 +44,7 @@ end
 img1 = rgb2gray(imread('data/parking/images/img_00000.png'));
 img2 = rgb2gray(imread('data/parking/images/img_00001.png'));
 
-[ currState, surrPose ] = processFrame( 0, img1, img2 );
+[ currState, surrPose ] = processFrame( 0, img1, img2, K );
 
 
 
