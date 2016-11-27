@@ -10,7 +10,7 @@ global match_lambda;
 global use_p3p;
 
 %% Pose Estimation
-use_p3p = false;
+use_p3p = true;
 
 %% Harris Corner Detector Parameters
 % Randomly chosen parameters that seem to work well
