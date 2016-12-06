@@ -14,8 +14,8 @@ ransac = 'yes';
 %ransac = 'no';
 
 % choose dataset
-%dataset = 'parking';
-dataset = 'kitti';
+dataset = 'parking';
+%dataset = 'kitti';
 %dataset = 'malaga';
 
 %% setting up paths and parameters
@@ -29,6 +29,8 @@ match_lambda = 5;
 
 % Other parameters.
 num_keypoints = 300; % with number of keypoints or threshold?
+
+addpath(genpath('../all_solns'))
 
 switch(dataset)
     case 'parking'  
@@ -84,8 +86,8 @@ switch(method)
     case 'toolbox' % computer vision toolbox
         % Load outlier-free point correspondences
 
-        points1 = detectHarrisFeatures(img_1, 'MinQuality', 0.0001);
-        points2 = detectHarrisFeatures(img_2, 'MinQuality', 0.0001);
+        points1 = detectHarrisFeatures(img_1, 'MinQuality', 0.000001);
+        points2 = detectHarrisFeatures(img_2, 'MinQuality', 0.000001);
 
         %points1 = detectHarrisFeatures(img_1);
         %points2 = detectHarrisFeatures(img_2);
@@ -123,6 +125,7 @@ end
 %         imshow(img_2)
 %         hold on
 %         scatter(p2(1,:),p2(2,:))
+%% RANSAC
 
 switch(ransac)
     case 'no'
@@ -144,16 +147,13 @@ switch(ransac)
         % homogeneous representation of 3D coordinates
         P = linearTriangulation(p1,p2,M1,M2); 
     
-       
-        % sanity check
-       scatter3(P(1,:), P(2,:), P(3,:), 'o')
         
     case 'yes'
 
         % Dummy initialization of RANSAC variables
-        num_iterations = 100;
-        pixel_threshold = 1;
-        k = 6; % for non-p3p use
+        num_iterations = 1000; % chosen by me
+        pixel_threshold = 1; % specified in pipeline
+        k = 8; % for non-p3p use
         
         % RANSAC implementation
         % use the epipolar line distance to discriminate inliers from
@@ -183,34 +183,118 @@ switch(ransac)
         M2 = K * [R_C2_W, T_C2_W];
         P = linearTriangulation(p1,p2,M1,M2);
         
-        figure(2)
-        scatter3(P(1,:), P(2,:), P(3,:), '.');
+        %figure(2)
+        %scatter3(P(1,:), P(2,:), P(3,:), '.');
+        
+        num_inliers_history = zeros(1,num_iterations);
+        max_num_inliers_history = zeros(1,num_iterations);
+        % to fit all candidate points in matrix
+        best_guess_history = zeros(3,k*num_iterations,2); 
         
         for ii = 1:num_iterations
                     
             % choose random data from landmarks
-            [landmark_sample, idx] = datasample(P, k, 2, 'Replace', false);
+            [landmark_sample, idx] = datasample(P(1:3,:),k,2,'Replace',false);
             p1_sample = p1(:, idx);
-        
-            F_candidate = fundamentalEightPoint_normalized(p1_sample,p2);
-            E_candidate = estimateEssentialMatrix(p1,p2,K,K);
-                               
+            p2_sample = p2(:, idx);
             
-                
-                
+            % how many sample points do I need? 
+            % in exercise: done with landmark indices...
+            
+            F_candidate = fundamentalEightPoint_normalized(p1_sample,p2_sample);
+            E_candidate = estimateEssentialMatrix(p1_sample,p2_sample,K,K);
+                                   
             % calculate epipolar line distance
-            % dist1 = epipolarLineDistance(F_candidate,p1(:,jj),p2(:,jj));
-            dist2 = distPoint2EpipolarLine(F_candidate,p1,p2); % from exercises
-                
-            if dist2 < pixel_threshold % candidate is an inlier
-                    
+            
+            d = epipolarLineDistance(F_candidate,p1_sample,p2_sample);
+            % all relevant elements on diagonal
+            inlierind = find(d<pixel_threshold);
+            % inliers = d(inlierind);
+            inliercount = length(inlierind);
 
+            
+            if ii == 1
+                max_num_inliers_history(ii) = inliercount;
+                best_guess_history(:,ii:ii+7,1) = p1_sample;
+                best_guess_history(:,ii:ii+7,2) = p2_sample;
+                counter = 1;
+            elseif ii > 1
+            % maxcount = maxcount + 1;
+            
+                if inliercount > max(max_num_inliers_history)
+                    max_num_inliers_history(ii) = inliercount;
+            
+                    % use coefficients from before as BEST GUESS
+                    % best_guess_history(:,ii) = polydata;
+            
+                    % use inliers to compute BEST GUESS
+                    
+                    [row_1,col_1] = ind2sub(size(d),inlierind);
+                    p1_inliers = p1_sample(:,unique(row_1));
+                    p2_inliers = p2_sample(:,unique(col_1));
+                    
+                    d_2 = epipolarLineDistance(F_candidate,...
+                                p1_inliers,p2_inliers);
+                    inlierind_2 = find(d_2<pixel_threshold);        
+                    [row_2,col_2] = ind2sub(size(d_2),inlierind_2);
+                    
+                    best_guess_history(:,8*ii+1:8*ii+8,1) = ...
+                                               p1_inliers(:,unique(row_2));
+                    best_guess_history(:,8*ii+1:8*ii+8,2) = ...
+                                               p2_inliers(:,unique(col_2));                                        
+                    
+                                                        
+                    % best_guess_history(:,ii,1) = polyfit(data(1,inliervals)',...
+                    %                                      inliers',2);
+           
+                elseif inliercount <= max(max_num_inliers_history)
+                    % set to previous value
+                    max_num_inliers_history(ii) = ...
+                                             max_num_inliers_history(ii-1);
+                    best_guess_history(:,8*ii+1:8*ii+8,:) = ...
+                                     best_guess_history(:,8*ii-7:8*ii,:);
+                end
+                % counter = counter + 1;
             end
-        end
+    
+        % set inliers back to zero
+        % inliers = zeros(,30);
+            
+            
+        end        
         
-        % implementing the eight-point algorithm with RANSAC: proper testing...
-        % extend exercise 5 to work with RANSAC (test with artificial outliers)
 end
+        
+figure(2)
+scatter(p1_inliers(1,:),p1_inliers(2,:))
+hold on 
+scatter(p2_inliers(1,:),p2_inliers(2,:))
+legend('matched points 1','matched points 2');   
+title('Feature match with RANSAC')
+            
+            
+            
+            
+            
+%             for jj = 1:length(p1_sample)
+%                 
+%                 dist2 = distPoint2EpipolarLine(F_candidate,p1_sample(jj),p2_sample(jj));
+%                 if dist2 < pixel_threshold % point is an inlier
+%                     % point is an inlier % do something
+%                 else
+%                     % point is outlier
+%                 end
+%                 % make history of inlier quantity
+%                 % find maximum of history
+%                 
+%                 % 
+%             end
+% 
+%         end
+%         
+%         % implementing the eight-point algorithm with RANSAC: proper testing...
+%         % extend exercise 5 to work with RANSAC (test with artificial outliers)
+% end
 
 %% end of monocular VO initialization
 
