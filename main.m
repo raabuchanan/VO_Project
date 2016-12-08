@@ -20,7 +20,7 @@ prevImage = imread(sprintf('data/%06d.png',0));
 
 % Declaring tempstate for triangulation
 tempState = [];
-fakepose = [0,0,0]';
+
 
 figure(5);
 %subplot(1, 3, 3);
@@ -34,8 +34,8 @@ for i = 1:20
     disp(['Frame ' num2str(i) ' being processed!']);
     currImage = imread(sprintf('data/%06d.png',i));
     
-    [ currState, currPose, tempState,fakepose ] = processFrame_new(...
-        prevState, prevImage, currImage, K, tempState,fakepose );
+    [ currState, currPose, tempState ] = processFrame_new(...
+        prevState, prevImage, currImage, K, tempState);
     
     R_C_W = currPose(:,1:3);
     t_C_W = currPose(:,4);
