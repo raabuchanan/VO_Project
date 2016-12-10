@@ -55,7 +55,7 @@ for i = 1:20
         plotCoordinateFrame(R_C_W', -R_C_W'*t_C_W, 2);
         hold on
         %scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r');
-        scatter3(currState(3, end-newkp:end), currState(4, end-newkp:end), currState(5, end-newkp:end), 5,'r');
+        scatter3(currState(3, end-newkp:end), currState(4, end-newkp:end), currState(5, end-newkp:end), 5);
         view(0,0);
         hold off
     else
