@@ -13,10 +13,8 @@ function d = epipolarLineDistance(F,p1,p2)
 
 l = F*p1;
 for ii = 1:size(p1,2)
-    for jj = 1:size(p2,2)
-        d(ii,jj) = abs(l(1,ii)*p2(1,jj) + l(2,ii)*p2(2,jj) + l(3,ii)) ./...
+    d(ii) = abs(l(1,ii)*p2(1,ii) + l(2,ii)*p2(2,ii) + l(3,ii)) ./...
                     sqrt(l(1,ii)^2 + l(2,ii)^2);
-    end
 end
 
 end

@@ -1,5 +1,5 @@
-function [ currState, currPose, tempState ,fakepose] = processFrame_new(...
-    prevState, prevImage, currImage, K, tempState, fakepose )
+function [ currState, currPose, tempState] = processFrame_new(...
+    prevState, prevImage, currImage, K, tempState)
 % prevState is a 5xk matrix where the columns corespond to 2D points on top
 % of the coresponding 3d points. k is the number of keypoints/landmarks
 
@@ -25,18 +25,20 @@ else
     k = 6;
 end
 
-%% For testing, get state from prevImage
-if (prevState == 0)
-    
-    % Calculate Harris scores
-    testHarrisScores = harris(prevImage, harris_patch_size, harris_kappa);
-    assert(min(size(testHarrisScores) == size(prevImage)));
-    % Select keypoints
-    prevState = selectKeypoints(...
-        testHarrisScores, num_keypoints, nonmaximum_supression_radius);
-    prevState = [prevState;zeros(3,num_keypoints)];
-end
-
+% %% For testing, get state from prevImage
+% if (prevState == 0)
+%     
+%     % Calculate Harris scores
+%     testHarrisScores = harris(prevImage, harris_patch_size, harris_kappa);
+%     assert(min(size(testHarrisScores) == size(prevImage)));
+%     % Select keypoints
+%     prevState = selectKeypoints(...
+%         testHarrisScores, num_keypoints, nonmaximum_supression_radius);
+%     prevState = [prevState;zeros(3,num_keypoints)];
+%     
+%     
+% end
+startPose = [eye(3),zeros(3,1)];
 %% Process prevImage
 
 prevKeypoints = prevState(1:2,:);
@@ -133,6 +135,7 @@ end
 if max_num_inliers == 0
     R_C_W = [];
     t_C_W = [];
+    disp(['Impossible to create new Pose']);
 else
     M_C_W = estimatePoseDLT(...
         matchedCurrKeypoints(:, inlier_mask>0)', ...
@@ -141,30 +144,27 @@ else
     t_C_W = M_C_W(:, end);
 end
 
-
-
 %% Output
 
 currState = [flipud(matchedCurrKeypoints); p_W_landmarks(:, matchesList)];
 
 currPose = [R_C_W, t_C_W];
-
+tempPose = currPose;
 
 
 %% START OF TRIANGULATION PART
 
 % Retrieves the Descriptors % Keypoints without a Landmark-match
 currKeypoints = currKeypoints(:,...
-    find(~ismember(currKeypoints', matchedCurrKeypoints(:,inlier_mask==0)','rows')));
+    (~ismember(currKeypoints', flipud(matchedCurrKeypoints)','rows')));
 currDescriptors = currDescriptors(:,...
-    find(~ismember(currKeypoints', matchedCurrKeypoints(:,inlier_mask==0)','rows')));
-currPose = currPose;
+    (~ismember(currKeypoints', flipud(matchedCurrKeypoints)','rows')));
 
 
 %IF no information for triangulation exists
 if isempty(tempState)
     %appends current image information to tempState
-    tempState = [im2double(currKeypoints);...
+    tempState = [double(currKeypoints);...
         im2double(currDescriptors);...
         repmat(currPose(:),1,length(currKeypoints(1,:)))];
     
@@ -175,16 +175,18 @@ else
     %are matched are kept for triangulation, the others are kept for future
     %triangulation
     
+    currPose = [reshape(tempState(end-11:end,end),3,4);0,0,0,1]...
+        * [currPose;0,0,0,1];
+    currPose = currPose(1:3,1:4);
+    
     prevKeypoints = (tempState(1:2,:));
     prevDescriptors = im2uint8(tempState(3:end-12,:));
     prevPose = tempState(end-11:end,:);
-    
     
     %% Find Matches Between NEW Image and OLD Images
     % Match Descriptors
     
     matches = matchDescriptors( currDescriptors, prevDescriptors, match_lambda);
-    
     
     % For Triangulation
     matchedCurrKeypoints = currKeypoints(:, matches > 0);
@@ -208,36 +210,34 @@ else
     
     % Grouping Old Keypoints with same Pose, Segments = number of same pose
     values = unique(prevPose(end,:));
-    segments = histc(prevPose(end,:),values);
+    segments = flipud(histc(prevPose(end,:),values)')';
     
-    
-    %% FOR EACH SEGMENT, DO RANSAC IF SIZE>8 otherwise discard totally
+    % Might do matching in here
+    %% FOR EACH SEGMENT, DO RANSAC IF SIZE>k otherwise discard totally
     new_landmarks = [];
     segment_val = 0;
     for i=1:length(segments)
-        % ONLY do ransac if displacement is long enough and segment has
-        % more than 8 elements.
         segment_val_min = segment_val + 1;
         segment_val = segments(i) + segment_val;
         
         % Setting up for RANSAC
         p1 = prevKeypoints(:,segment_val_min:segment_val);
         M1 =  reshape(prevPose(:,segment_val_min),3,4);
-        p2 = matchedCurrKeypoints;
+        p2 = (matchedCurrKeypoints);
         M2 = currPose;
         p1(3,:)=1;
         p2(3,:)=1;
         
-        
+        % Pose to pose displacement for current section
         p2p_dist = sqrt(...
             (prevPose(end-2,segment_val_min)-currPose(end-2))^2+...
             (prevPose(end-1,segment_val_min)-currPose(end-1))^2+...
             (prevPose(end,segment_val_min)-currPose(end))^2);
         % ONLY do ransac if displacement is long enough and segment has
         % more than 8 elements.
-        if (segments(i) >= 8 && p2p_dist > pose2pose_threshold)
-            
-            k = 8; % number of datapoints selected(minimum 8)
+        k = 8; % number of datapoints selected(minimum 8)
+        if (segments(i) >= k && p2p_dist > pose2pose_threshold)
+            disp(['Frame can be triangulated!']);
             pixel_threshold =1;
             num_inliers_history = zeros(1,num_iterations);
             max_num_inliers_history = zeros(1,num_iterations);
@@ -254,7 +254,7 @@ else
                 F_candidate = fundamentalEightPoint_normalized(p1_sample,p2_sample);
                 
                 % calculate epipolar line distance
-                d = diag(epipolarLineDistance(F_candidate,p1_sample,p2_sample));
+                d = epipolarLineDistance(F_candidate,p1_sample,p2_sample));
                 
                 % all relevant elements on diagonal
                 inlierind = find(d<pixel_threshold);
@@ -272,7 +272,7 @@ else
                         p1_inliers = p1_sample(:,inlierind);
                         p2_inliers = p2_sample(:,inlierind);
                         
-                        d_2 = diag(epipolarLineDistance(F_candidate,...
+                        d_2 = epipolarLineDistance(F_candidate,...
                             p1_inliers,p2_inliers));
                         inlierind_2 = find(d_2<pixel_threshold);
                         
@@ -299,17 +299,19 @@ else
         
     end % END OF RANSAC FOR SEGMENTS
     %Adding new landmarks to current landmarks data
+
+    % COMMENT/UNCOMMENT to include new landmarks
     currState = [currState,new_landmarks];
     
     % Adding unmatch still vaild landmarks
-    tempState = [[im2double(prevKeypoints);...
+    tempState = [[double(prevKeypoints);...
         im2double(prevDescriptors);...
         prevPose],...
-        [im2double(unmatchedCurrKeypoints);...
+        [double(unmatchedCurrKeypoints);...
         im2double(unmatchedCurrDescriptors);...
         repmat(currPose(:),1,length(unmatchedCurrKeypoints(1,:)))]];
-    %FAKE currPose
-    
+
+    currPose = tempPose;
     
 end
 end
