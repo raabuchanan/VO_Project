@@ -4,6 +4,7 @@ function [ currState, currPose, tempState] = processFrame_new(...
 % of the coresponding 3d points. k is the number of keypoints/landmarks
 
 addpath(genpath('../../all_solns'))
+rng(3);
 
 global harris_patch_size;
 global harris_kappa;
@@ -27,7 +28,7 @@ end
 
 % %% For testing, get state from prevImage
 % if (prevState == 0)
-%     
+%
 %     % Calculate Harris scores
 %     testHarrisScores = harris(prevImage, harris_patch_size, harris_kappa);
 %     assert(min(size(testHarrisScores) == size(prevImage)));
@@ -35,8 +36,8 @@ end
 %     prevState = selectKeypoints(...
 %         testHarrisScores, num_keypoints, nonmaximum_supression_radius);
 %     prevState = [prevState;zeros(3,num_keypoints)];
-%     
-%     
+%
+%
 % end
 startPose = [eye(3),zeros(3,1)];
 %% Process prevImage
@@ -219,15 +220,14 @@ else
     for i=1:length(segments)
         segment_val_min = segment_val + 1;
         segment_val = segments(i) + segment_val;
-        
         % Setting up for RANSAC
-        p1 = prevKeypoints(:,segment_val_min:segment_val);
+        p1 = flipud(prevKeypoints(:,segment_val_min:segment_val));
         M1 =  reshape(prevPose(:,segment_val_min),3,4);
-        p2 = (matchedCurrKeypoints);
+        p2 = flipud(matchedCurrKeypoints(:,segment_val_min:segment_val));
         M2 = currPose;
         p1(3,:)=1;
         p2(3,:)=1;
-        
+        p2saved=p2;
         % Pose to pose displacement for current section
         p2p_dist = sqrt(...
             (prevPose(end-2,segment_val_min)-currPose(end-2))^2+...
@@ -235,15 +235,15 @@ else
             (prevPose(end,segment_val_min)-currPose(end))^2);
         % ONLY do ransac if displacement is long enough and segment has
         % more than 8 elements.
-        k = 8; % number of datapoints selected(minimum 8)
+        k = 10; % number of datapoints selected(minimum 8)
         if (segments(i) >= k && p2p_dist > pose2pose_threshold)
-            disp(['Frame can be triangulated!']);
+            disp('Frame can be triangulated!');
             pixel_threshold =1;
             num_inliers_history = zeros(1,num_iterations);
             max_num_inliers_history = zeros(1,num_iterations);
             % to fit all candidate points in matrix
             best_guess_history = zeros(3,k*num_iterations,2);
-            
+            segments
             for ii = 1:num_iterations
                 
                 % choose random data from landmarks
@@ -252,10 +252,10 @@ else
                 p2_sample = p2(:, idx);
                 
                 F_candidate = fundamentalEightPoint_normalized(p1_sample,p2_sample);
-                
                 % calculate epipolar line distance
-                d = epipolarLineDistance(F_candidate,p1_sample,p2_sample));
-                
+                for kk=1:length(p1(1,:))
+                    d(kk) = distPoint2EpipolarLine(F_candidate,p1,p2);
+                end
                 % all relevant elements on diagonal
                 inlierind = find(d<pixel_threshold);
                 inliercount = length(inlierind);
@@ -264,20 +264,22 @@ else
                     max_num_inliers_history(ii) = inliercount;
                 elseif ii > 1
                     
-                    if inliercount > max(max_num_inliers_history)
+                    if inliercount > max(max_num_inliers_history) && inliercount>=8
                         max_num_inliers_history(ii) = inliercount;
                         
                         % use inliers to compute BEST GUESS
                         
-                        p1_inliers = p1_sample(:,inlierind);
-                        p2_inliers = p2_sample(:,inlierind);
-                        
-                        d_2 = epipolarLineDistance(F_candidate,...
-                            p1_inliers,p2_inliers));
-                        inlierind_2 = find(d_2<pixel_threshold);
-                        
-                        best_guess_1 = p1_inliers(:,inlierind_2);
-                        best_guess_2 = p2_inliers(:,inlierind_2);
+                        p1_inliers = p1(:,inlierind);
+                        p2_inliers = p2(:,inlierind);
+                        %                         F_candidate = fundamentalEightPoint_normalized(p1_inliers,p2_inliers);
+                        %                         for kk=1:length(p1(1,:))
+                        %                             d_2(kk) = distPoint2EpipolarLine(F_candidate,p1(:,kk),p2(:,kk));
+                        %                         end
+                        %
+                        %                         inlierind_2 = find(d_2<pixel_threshold);
+                        %
+                        best_guess_1 = p1_inliers; %p1(:,inlierind_2);
+                        best_guess_2 = p2_inliers; %p2(:,inlierind_2);
                     elseif inliercount <= max(max_num_inliers_history)
                         % set to previous value
                         max_num_inliers_history(ii) = ...
@@ -286,31 +288,36 @@ else
                 end
             end % END OF RANSAC LOOP
             % Adding NEW landmarks
-            P = linearTriangulation(best_guess_1,best_guess_2,M1,M2);
-            if isempty(new_landmarks)
-                new_landmarks = [(best_guess_2(1:2,:));P(1:3,:)];
-            else
-                new_landmarks = [new_landmarks,...
-                    [(best_guess_2(1:2,:));P(1:3,:)]];
-            end %end of adding landmarks
-        elseif segments(i)<8
+            if size(segments,2)>=4
+                best_guess_1 = [(best_guess_1(1:2,:));best_guess_1(3,:)];
+                best_guess_2 = [(best_guess_2(1:2,:));best_guess_2(3,:)];
+                P = linearTriangulation(...
+                    best_guess_1,best_guess_2,K*M1,K*M2);
+                
+                if isempty(new_landmarks)
+                    new_landmarks = [(best_guess_2(1:2,:));P(1:3,:)];
+                else
+                    new_landmarks = [new_landmarks,...
+                        [(best_guess_2(1:2,:));P(1:3,:)]];
+                end %end of adding landmarks
+            end
+            
+        elseif segments(i)<k
             % REMOVE KEYPOINTS SINCE NO TRIANGULATION POSSIBLE(for data)
         end % END OF IF RANSAC OR NOT
         
     end % END OF RANSAC FOR SEGMENTS
     %Adding new landmarks to current landmarks data
-
+    
     % COMMENT/UNCOMMENT to include new landmarks
     currState = [currState,new_landmarks];
     
     % Adding unmatch still vaild landmarks
-    tempState = [[double(prevKeypoints);...
-        im2double(prevDescriptors);...
-        prevPose],...
+    tempState = [tempState,...
         [double(unmatchedCurrKeypoints);...
         im2double(unmatchedCurrDescriptors);...
         repmat(currPose(:),1,length(unmatchedCurrKeypoints(1,:)))]];
-
+    
     currPose = tempPose;
     
 end
