@@ -3,18 +3,21 @@ close all
 clc
 
 addpath(genpath('src'));
+addpath(genpath('all_solns'));
 
 parameters;
 
 
 % Data from exercise 6
 K = load('data/K.txt');
-keypoints = load('data/keypoints.txt')';
-p_W_landmarks = load('data/p_W_landmarks.txt')';
+keypoints = load('data/keypoints.txt')'; % [v; u]
+p_W_landmarks = load('data/p_W_landmarks.txt')';% [X,Y,Z]
 
 prevState = [keypoints; p_W_landmarks];
 
 prevImage = imread(sprintf('data/%06d.png',0));
+
+groundTruth = load('data/poses/00.txt');
 
 %% Part 4 - Same, for all frames
 
@@ -45,17 +48,23 @@ for i = 1:20
     R_C_W = currPose(:,1:3);
     t_C_W = currPose(:,4);
 
-    startPose(1:3,1:3) = R_C_W * startPose(1:3,1:3);
-    startPose(1:3,end) = t_C_W + startPose(1:3,end);
-    
 
     % Distinguish success from failure.
     if (numel(R_C_W) > 0)
         %subplot(1, 3, 3);
-        plotCoordinateFrame(R_C_W', -R_C_W'*t_C_W, 2);
+        plotCoordinateFrame(R_C_W', -R_C_W'*t_C_W, 2,['r';'r';'r']);
         hold on
+       
+        % Ground truth
+        truePose = reshape(groundTruth(i+1, :), 4, 3)';
+        rot = truePose(1:3,1:3);
+        trans = truePose(:,4);
+        plotCoordinateFrame(rot', rot*trans, 2,['b';'b';'b']);
+        hold on
+        
         %scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r');
-        scatter3(currState(3, end-newkp:end), currState(4, end-newkp:end), currState(5, end-newkp:end), 5);
+        scatter3(currState(3, end-newkp:end), currState(4, end-newkp:end),...
+            currState(5, end-newkp:end), 5,'r','filled');
         view(0,0);
         hold off
     else

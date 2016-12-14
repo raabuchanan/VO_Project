@@ -25,25 +25,10 @@ else
     k = 6;
 end
 
-% %% For testing, get state from prevImage
-% if (prevState == 0)
-%     
-%     % Calculate Harris scores
-%     testHarrisScores = harris(prevImage, harris_patch_size, harris_kappa);
-%     assert(min(size(testHarrisScores) == size(prevImage)));
-%     % Select keypoints
-%     prevState = selectKeypoints(...
-%         testHarrisScores, num_keypoints, nonmaximum_supression_radius);
-%     prevState = [prevState;zeros(3,num_keypoints)];
-%     
-%     
-% end
-startPose = [eye(3),zeros(3,1)];
 %% Process prevImage
 
-prevKeypoints = prevState(1:2,:);
+prevKeypoints = prevState(1:2,:); % [V;U]
 p_W_landmarks = prevState(3:5,:);
-
 
 prevDescriptors = describeKeypoints(prevImage, prevKeypoints, descriptor_radius);
 
@@ -52,7 +37,7 @@ prevDescriptors = describeKeypoints(prevImage, prevKeypoints, descriptor_radius)
 currHarrisScores = harris(currImage, harris_patch_size, harris_kappa);
 assert(min(size(currHarrisScores) == size(currImage)));
 
-% Select keypoints
+% Select keypoints [V; U]
 currKeypoints = selectKeypoints(...
     currHarrisScores, num_keypoints, nonmaximum_supression_radius);
 
@@ -60,7 +45,7 @@ currKeypoints = selectKeypoints(...
 currDescriptors = describeKeypoints(currImage, currKeypoints, descriptor_radius);
 
 %% Find Matches in two images
-% Match Descriptors
+% Match Descriptors both in [V;U]
 matches = matchDescriptors( currDescriptors, prevDescriptors, match_lambda);
 
 matchedCurrKeypoints = currKeypoints(:, matches > 0);
@@ -71,7 +56,7 @@ matchedLandmarks = p_W_landmarks(:, matchesList);
 
 % Initialize RANSAC.
 inlier_mask = zeros(1, size(matchedCurrKeypoints, 2));
-matchedCurrKeypoints = flipud(matchedCurrKeypoints);
+matchedCurrKeypoints = flipud(matchedCurrKeypoints); % !! [U;V] !! Flipped!
 max_num_inliers_history = zeros(1, num_iterations);
 max_num_inliers = 0;
 
@@ -145,8 +130,10 @@ else
 end
 
 %% Output
+% back to [V;U]
+matchedCurrKeypoints = flipud(matchedCurrKeypoints);
 
-currState = [flipud(matchedCurrKeypoints); p_W_landmarks(:, matchesList)];
+currState = [matchedCurrKeypoints; p_W_landmarks(:, matchesList)];
 
 currPose = [R_C_W, t_C_W];
 tempPose = currPose;
@@ -155,10 +142,11 @@ tempPose = currPose;
 %% START OF TRIANGULATION PART
 
 % Retrieves the Descriptors % Keypoints without a Landmark-match
-currKeypoints = currKeypoints(:,...
-    (~ismember(currKeypoints', flipud(matchedCurrKeypoints)','rows')));
-currDescriptors = currDescriptors(:,...
-    (~ismember(currKeypoints', flipud(matchedCurrKeypoints)','rows')));
+
+unMatchedIndices = ~ismember(currKeypoints', matchedCurrKeypoints','rows');
+
+currKeypoints = currKeypoints(:,unMatchedIndices);
+currDescriptors = currDescriptors(:,unMatchedIndices);
 
 
 %IF no information for triangulation exists
@@ -254,7 +242,7 @@ else
                 F_candidate = fundamentalEightPoint_normalized(p1_sample,p2_sample);
                 
                 % calculate epipolar line distance
-                d = epipolarLineDistance(F_candidate,p1_sample,p2_sample));
+                d = epipolarLineDistance(F_candidate,p1,p2);
                 
                 % all relevant elements on diagonal
                 inlierind = find(d<pixel_threshold);
@@ -264,20 +252,21 @@ else
                     max_num_inliers_history(ii) = inliercount;
                 elseif ii > 1
                     
-                    if inliercount > max(max_num_inliers_history)
+                    if inliercount > max(max_num_inliers_history) && inliercount>=8
                         max_num_inliers_history(ii) = inliercount;
                         
                         % use inliers to compute BEST GUESS
                         
-                        p1_inliers = p1_sample(:,inlierind);
-                        p2_inliers = p2_sample(:,inlierind);
+                        p1_inliers = p1(:,inlierind);
+                        p2_inliers = p2(:,inlierind);
                         
-                        d_2 = epipolarLineDistance(F_candidate,...
-                            p1_inliers,p2_inliers));
+                        best_F_candidate = fundamentalEightPoint_normalized(p1_inliers,p2_inliers);
+                        
+                        d_2 = epipolarLineDistance(best_F_candidate,p1,p2);
                         inlierind_2 = find(d_2<pixel_threshold);
                         
-                        best_guess_1 = p1_inliers(:,inlierind_2);
-                        best_guess_2 = p2_inliers(:,inlierind_2);
+                        best_guess_1 = p1(:,inlierind_2);
+                        best_guess_2 = p2(:,inlierind_2);
                     elseif inliercount <= max(max_num_inliers_history)
                         % set to previous value
                         max_num_inliers_history(ii) = ...
@@ -286,7 +275,7 @@ else
                 end
             end % END OF RANSAC LOOP
             % Adding NEW landmarks
-            P = linearTriangulation(best_guess_1,best_guess_2,M1,M2);
+            P = linearTriangulation(best_guess_1,best_guess_2,K*M1,K*M2);
             if isempty(new_landmarks)
                 new_landmarks = [(best_guess_2(1:2,:));P(1:3,:)];
             else
@@ -304,9 +293,7 @@ else
     currState = [currState,new_landmarks];
     
     % Adding unmatch still vaild landmarks
-    tempState = [[double(prevKeypoints);...
-        im2double(prevDescriptors);...
-        prevPose],...
+    tempState = [tempState,...
         [double(unmatchedCurrKeypoints);...
         im2double(unmatchedCurrDescriptors);...
         repmat(currPose(:),1,length(unmatchedCurrKeypoints(1,:)))]];
