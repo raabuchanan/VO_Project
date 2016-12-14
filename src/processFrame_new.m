@@ -209,9 +209,9 @@ else
         segment_val = segments(i) + segment_val;
         
         % Setting up for RANSAC
-        p1 = prevKeypoints(:,segment_val_min:segment_val);
+        p1 = flipud(prevKeypoints(:,segment_val_min:segment_val));
         M1 =  reshape(prevPose(:,segment_val_min),3,4);
-        p2 = (matchedCurrKeypoints);
+        p2 = flipud((matchedCurrKeypoints));
         M2 = currPose;
         p1(3,:)=1;
         p2(3,:)=1;
@@ -241,46 +241,60 @@ else
                 
                 F_candidate = fundamentalEightPoint_normalized(p1_sample,p2_sample);
                 
-                % calculate epipolar line distance
-                d = epipolarLineDistance(F_candidate,p1,p2);
+                %%calculate epipolar line distance
+%                 d = epipolarLineDistance(F_candidate,p1,p2);
+                
+                d = zeros(1,length(p1(1,:)));
+                for kk=1:length(p1(1,:))
+                    d(kk) = distPoint2EpipolarLine(F_candidate,p1(:,kk),p2(:,kk));
+                end
                 
                 % all relevant elements on diagonal
                 inlierind = find(d<pixel_threshold);
                 inliercount = length(inlierind);
                 
-                if ii == 1
+                if inliercount > max(max_num_inliers_history) && inliercount>=8
                     max_num_inliers_history(ii) = inliercount;
-                elseif ii > 1
-                    
-                    if inliercount > max(max_num_inliers_history) && inliercount>=8
-                        max_num_inliers_history(ii) = inliercount;
-                        
-                        % use inliers to compute BEST GUESS
-                        
-                        p1_inliers = p1(:,inlierind);
-                        p2_inliers = p2(:,inlierind);
-                        
-                        best_F_candidate = fundamentalEightPoint_normalized(p1_inliers,p2_inliers);
-                        
-                        d_2 = epipolarLineDistance(best_F_candidate,p1,p2);
-                        inlierind_2 = find(d_2<pixel_threshold);
-                        
-                        best_guess_1 = p1(:,inlierind_2);
-                        best_guess_2 = p2(:,inlierind_2);
-                    elseif inliercount <= max(max_num_inliers_history)
-                        % set to previous value
-                        max_num_inliers_history(ii) = ...
-                            max_num_inliers_history(ii-1);
+
+                    % use inliers to compute BEST GUESS
+
+                    p1_inliers = p1(:,inlierind);
+                    p2_inliers = p2(:,inlierind);
+
+                    best_F_candidate = fundamentalEightPoint_normalized(p1_inliers,p2_inliers);
+
+%                         d_2 = epipolarLineDistance(best_F_candidate,p1,p2);
+
+                    d_2 = zeros(1,length(p1(1,:)));
+                    for kk=1:length(p1(1,:))
+                        d_2(kk) = distPoint2EpipolarLine(best_F_candidate,p1(:,kk),p2(:,kk));
                     end
+
+                    inlierind_2 = find(d_2<pixel_threshold);
+
+                    best_guess_1 = p1(:,inlierind_2);
+                    best_guess_2 = p2(:,inlierind_2);
+
+                elseif inliercount < max(max_num_inliers_history)
+                    % set to previous value
+                    max_num_inliers_history(ii) = ...
+                        max_num_inliers_history(ii-1);
                 end
             end % END OF RANSAC LOOP
-            % Adding NEW landmarks
-            P = linearTriangulation(best_guess_1,best_guess_2,K*M1,K*M2);
+            % Adding NEW landmarks triangulation needs to be [U;V]
+            
+%             best_guess_1 = [flipud(best_guess_1(1:2,:));best_guess_1(3,:)];
+%             best_guess_2 = [flipud(best_guess_2(1:2,:));best_guess_2(3,:)];
+            try
+                P = linearTriangulation(best_guess_1,best_guess_2,K*M1,K*M2);
+            catch
+                disp('No inliers');
+            end
             if isempty(new_landmarks)
-                new_landmarks = [(best_guess_2(1:2,:));P(1:3,:)];
+                new_landmarks = [flipud(best_guess_2(1:2,:));P(1:3,:)];
             else
                 new_landmarks = [new_landmarks,...
-                    [(best_guess_2(1:2,:));P(1:3,:)]];
+                    [flipud(best_guess_2(1:2,:));P(1:3,:)]];
             end %end of adding landmarks
         elseif segments(i)<8
             % REMOVE KEYPOINTS SINCE NO TRIANGULATION POSSIBLE(for data)
