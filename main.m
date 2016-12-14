@@ -50,13 +50,7 @@ for i = 1:20
         trans = truePose(:,4);
         plotCoordinateFrame(rot', rot*trans, 2,['b';'b';'b']);
         hold on
-        
-        %scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r');
-        try
-            scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
-        catch
-            test =0;
-        end
+        scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
         view(0,0);
         hold off
     else

@@ -28,7 +28,7 @@ end
 %% Process prevImage
 
 prevKeypoints = prevState(1:2,:); % [V;U]
-p_W_landmarks = prevState(3:5,:);
+prevLandmarks = prevState(3:5,:);
 
 prevDescriptors = describeKeypoints(prevImage, prevKeypoints, descriptor_radius);
 
@@ -45,12 +45,11 @@ currKeypoints = selectKeypoints(...
 currDescriptors = describeKeypoints(currImage, currKeypoints, descriptor_radius);
 
 %% Find Matches in two images
-% Match Descriptors both in [V;U]
-matches = matchDescriptors( currDescriptors, prevDescriptors, match_lambda);
 
+matches = matchDescriptors( currDescriptors, prevDescriptors, match_lambda);
+% [V;U]
 matchedCurrKeypoints = currKeypoints(:, matches > 0);
-matchesList = matches(matches > 0);
-matchedLandmarks = p_W_landmarks(:, matchesList);
+matchedLandmarks = prevLandmarks(:, matches(matches > 0));
 
 %% RANSAC
 
@@ -60,7 +59,6 @@ matchedCurrKeypoints = flipud(matchedCurrKeypoints); % !! [U;V] !! Flipped!
 max_num_inliers_history = zeros(1, num_iterations);
 max_num_inliers = 0;
 
-% RANSAC
 for i = 1:num_iterations
     [landmark_sample, idx] = datasample(matchedLandmarks, k, 2, 'Replace', false);
     keypoint_sample = matchedCurrKeypoints(:, idx);
@@ -129,32 +127,31 @@ else
     t_C_W = M_C_W(:, end);
 end
 
-%% Output
 % back to [V;U]
 matchedCurrKeypoints = flipud(matchedCurrKeypoints);
 
-currState = [matchedCurrKeypoints; p_W_landmarks(:, matchesList)];
+currState = [matchedCurrKeypoints; matchedLandmarks];
 
-currPose = [R_C_W, t_C_W];
-tempPose = currPose;
-
+poseDifference = [R_C_W, t_C_W];
 
 %% START OF TRIANGULATION PART
 
 % Retrieves the Descriptors % Keypoints without a Landmark-match
 
 unMatchedIndices = ~ismember(currKeypoints', matchedCurrKeypoints','rows');
-
+% [V;U]
 currKeypoints = currKeypoints(:,unMatchedIndices);
 currDescriptors = currDescriptors(:,unMatchedIndices);
 
 
-%IF no information for triangulation exists
+%First time running processFrame
 if isempty(tempState)
     %appends current image information to tempState
     tempState = [double(currKeypoints);...
         im2double(currDescriptors);...
-        repmat(currPose(:),1,length(currKeypoints(1,:)))];
+        repmat(poseDifference(:),1,length(currKeypoints(1,:)))];
+    
+    currPose = poseDifference;
     
 else
     %A previous set of keypoints exists, now we need to determine which of
@@ -164,7 +161,7 @@ else
     %triangulation
     
     currPose = [reshape(tempState(end-11:end,end),3,4);0,0,0,1]...
-        * [currPose;0,0,0,1];
+        * [poseDifference;0,0,0,1];
     currPose = currPose(1:3,1:4);
     
     prevKeypoints = (tempState(1:2,:));
@@ -175,15 +172,15 @@ else
     % Match Descriptors
     
     matches = matchDescriptors( currDescriptors, prevDescriptors, match_lambda);
-    
+    % [V;U]
     % For Triangulation
     matchedCurrKeypoints = currKeypoints(:, matches > 0);
     matchedCurrDescriptors = currDescriptors(:, matches > 0);
-    
+    % [V;U]
     % For FUTURE Triangulation
     unmatchedCurrKeypoints = currKeypoints(:, matches == 0);
     unmatchedCurrDescriptors = currDescriptors(:, matches == 0);
-    
+    % [V;U]
     % ONLY Matched old keypoints are kept:
     matchesList = matches(matches > 0);
     prevKeypoints = prevKeypoints(:, matchesList);
@@ -208,7 +205,7 @@ else
         segment_val_min = segment_val + 1;
         segment_val = segments(i) + segment_val;
         
-        % Setting up for RANSAC
+        % Setting up for RANSAC [!!!!!!!!!U;V]!!!!!!!!
         p1 = flipud(prevKeypoints(:,segment_val_min:segment_val));
         M1 =  reshape(prevPose(:,segment_val_min),3,4);
         p2 = flipud((matchedCurrKeypoints));
@@ -238,12 +235,12 @@ else
                 [~, idx] = datasample(p1(1:3,:),k,2,'Replace',false);
                 p1_sample = p1(:, idx);
                 p2_sample = p2(:, idx);
-                
+                %[U;V]
                 F_candidate = fundamentalEightPoint_normalized(p1_sample,p2_sample);
                 
                 %%calculate epipolar line distance
 %                 d = epipolarLineDistance(F_candidate,p1,p2);
-                
+                %[U;V]
                 d = zeros(1,length(p1(1,:)));
                 for kk=1:length(p1(1,:))
                     d(kk) = distPoint2EpipolarLine(F_candidate,p1(:,kk),p2(:,kk));
@@ -260,7 +257,7 @@ else
 
                     p1_inliers = p1(:,inlierind);
                     p2_inliers = p2(:,inlierind);
-
+                    %[U;V]
                     best_F_candidate = fundamentalEightPoint_normalized(p1_inliers,p2_inliers);
 
 %                         d_2 = epipolarLineDistance(best_F_candidate,p1,p2);
@@ -271,7 +268,7 @@ else
                     end
 
                     inlierind_2 = find(d_2<pixel_threshold);
-
+                    %[U;V]
                     best_guess_1 = p1(:,inlierind_2);
                     best_guess_2 = p2(:,inlierind_2);
 
@@ -291,8 +288,10 @@ else
                 disp('No inliers');
             end
             if isempty(new_landmarks)
+                %[V;U]
                 new_landmarks = [flipud(best_guess_2(1:2,:));P(1:3,:)];
             else
+                %[V;U]
                 new_landmarks = [new_landmarks,...
                     [flipud(best_guess_2(1:2,:));P(1:3,:)]];
             end %end of adding landmarks
@@ -311,8 +310,6 @@ else
         [double(unmatchedCurrKeypoints);...
         im2double(unmatchedCurrDescriptors);...
         repmat(currPose(:),1,length(unmatchedCurrKeypoints(1,:)))]];
-
-    currPose = tempPose;
     
 end
 end
