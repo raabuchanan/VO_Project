@@ -2,6 +2,8 @@ function [ currState, currPose ] = processFrame( prevState, prevImage, currImage
 % prevState is a 5xk matrix where the columns corespond to 2D points on top
 % of the coresponding 3d points. k is the number of keypoints/landmarks
 
+addpath(genpath('../../all_solns'))
+
 global harris_patch_size;
 global harris_kappa;
 global num_keypoints;
