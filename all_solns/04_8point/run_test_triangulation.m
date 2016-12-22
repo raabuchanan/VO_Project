@@ -19,14 +19,14 @@ M1 =   [500 0 320 0
         0 500 240 0
         0 0 1 0];
 
-M2 =   [500 0 320 -100
+M2 =   [500 0 320 0
         0 500 240 0
-        0 0 1 0];
+        0 0 1 -100];
 				
 p1 = M1 * P;     % Image (i.e., projected) points
 p2 = M2 * P;
 
-P_est = linearTriangulation(p1,p2,M1,M2);
+P_est = linearTriangulation(p1./p1(3,:),p2./p2(3,:),M1,M2);
 
 fprintf('P_est-P=\n');
 (P_est-P)

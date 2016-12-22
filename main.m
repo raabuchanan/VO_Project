@@ -11,9 +11,7 @@ K = load('data/K.txt');
 intitialKeypoints = load('data/keypoints.txt')'; % [v; u]
 initialLandmarks = load('data/p_W_landmarks.txt')';% [X,Y,Z]
 groundTruth = load('data/poses/00.txt');
-
-% Declaring tempstate for triangulation
-tempState = [];
+pastPoints = [];%formerly known as tempstate
 
 figure;
 %subplot(1, 3, 3); %uncomment to display images
@@ -30,10 +28,7 @@ for i = 1:20
     disp(['Frame ' num2str(i) ' being processed!']);
     currImage = imread(sprintf('data/%06d.png',i));
     
-    %newkp= sum(~ismember(prevState(3:5,:)',p_W_landmarks(1:3,:)', 'rows'));
-    
-    [ currState, currPose, tempState ] = processFrame_new(...
-      prevState, prevImage, currImage, K, tempState);
+    [ currState, currPose, pastPoints] = processFrame(prevState, prevImage, currImage, K, pastPoints);
     
     R_C_W = currPose(:,1:3);
     t_C_W = currPose(:,4);
@@ -53,18 +48,19 @@ for i = 1:20
         scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
         view(0,0);
         hold off
+        
+        disp(['Rotation '])
+        rotation_error = abs(R_C_W - rot)
+        disp(['Translation '])
+        translate_error = abs(t_C_W + trans)
+        
     else
         disp(['Frame ' num2str(i) ' failed to localize!']);
     end
-    
-%     subplot(1, 3, [1 2]);
-%     imshow(currImage);
     
     prevState = currState;
     prevImage = currImage;
 
     pause(0.01);
-    disp(['New landmarks:' num2str(sum(...
-        ~ismember(prevState(3:5,:)',initialLandmarks(1:3,:)', 'rows')))]);
     
 end
