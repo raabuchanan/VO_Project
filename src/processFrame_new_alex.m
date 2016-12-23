@@ -17,7 +17,7 @@ global pose_dist_threshold;
 %% P3P or DLT
 if use_p3p
     num_iterations = 400;
-    pixel_tolerance = 5;
+    pixel_tolerance = 1;
     k = 3;
 else
     num_iterations = 2000;
@@ -340,7 +340,7 @@ currPose = poseDifference;
                
             try
                 
-                P = linearTriangulation(K\best_guess_1,K\best_guess_2,K*M1,K*M2);
+                P = linearTriangulation(best_guess_1,best_guess_2,K*M1,K*M2);
                 
                     %filter new points:
                     R_C_W = currPose(:,1:3);

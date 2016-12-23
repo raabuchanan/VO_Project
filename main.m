@@ -35,7 +35,6 @@ for i = 1:20
 
     % Distinguish success from failure.
     if (numel(R_C_W) > 0)
-        %subplot(1, 3, 3);
         plotCoordinateFrame(R_C_W', -R_C_W'*t_C_W, 2,['r';'r';'r']);
         hold on
        
