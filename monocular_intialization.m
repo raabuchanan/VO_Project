@@ -1,15 +1,11 @@
+function [prevState,firstLandmarks] = monocular_intialization(img0,img1,ransac,K)
 %function [firstState,firstLandmarks] = monocular_initialization(img0,img1,ransac,dataset)
 
 % indicate first two images for bootstrapping
 % for RANSAC filtering of matched keypoints, specify 0 (no) or 1 (yes)
 % for dataset, specify 0 (kitti), 1 (malaga), or 2 (parking)
 
-%% setting up parameters
-close all
 % Parameters from exercise 3.
-global K_parking;
-global K_malaga;
-global K_kitti;
 global harris_patch_size;
 global harris_kappa;
 global nonmaximum_supression_radius;
@@ -17,14 +13,6 @@ global descriptor_radius;
 global match_lambda;
 global num_keypoints;
 
-switch(dataset)
-    case 0
-        K = K_kitti;
-    case 1
-        K = K_malaga;
-    case 2
-        K = K_parking;
-end
 
 %% establish keypoint correspondences between these two frames
 
@@ -152,7 +140,7 @@ elseif ransac == 1
     for ii = 1:num_iterations
         
         % choose random data from landmarks
-        [landmark_sample, idx] = datasample(P(1:3,:),k,2,'Replace',false);
+        [~, idx] = datasample(P(1:3,:),k,2,'Replace',false);
         p1_sample = p0(:,idx);
         p2_sample = p1(:,idx);
         
@@ -164,7 +152,7 @@ elseif ransac == 1
         
         % calculate epipolar line distance
         
-        d = diag(epipolarLineDistance(F_candidate,p0,p1));
+        d = (epipolarLineDistance(F_candidate,p0,p1));
         
         % all relevant elements on diagonal
         inlierind = find(d < pixel_threshold);
@@ -180,7 +168,7 @@ elseif ransac == 1
         end
     end
     %% COMPUTE NEW MODEL FROM BEST
-    d = diag(epipolarLineDistance(F_best,p0,p1));
+    d = (epipolarLineDistance(F_best,p0,p1));
     % all relevant elements on diagonal
     inlierind = find(d < pixel_threshold);
     p0 = p0(:,inlierind);
@@ -197,6 +185,8 @@ elseif ransac == 1
     M1 = K * [R_C2_W, T_C2_W];
     firstLandmarks = linearTriangulation(p0,p1,M0,M1);
     
+    prevState = [flipud(p1(1:2,:));firstLandmarks];
+    
     
     
 %     figure(5)
@@ -210,15 +200,17 @@ elseif ransac == 1
 %     ylabel('Y');
 %     zlabel('Z');
     
-    figure(6);
-    imshow(img0);
-    title('3D-Landmarks passed RANSAC')
-    hold on;
-    plot(p0(1,:), p0(2, :), 'rx', 'Linewidth', 2);
-    hold on;
-    plot([p0(1,:); p1(1,:)],[p0(2,:); p1(2,:)], 'g-', 'Linewidth', 3);
-    hold on
-    plot(p1(1,:),p1(2,:),'bo','Linewidth',2);
-    disp(['Monocular initialization done!'])
+%     figure(6);
+%     imshow(img0);
+%     title('3D-Landmarks passed RANSAC')
+%     hold on;
+%     plot(p0(1,:), p0(2, :), 'rx', 'Linewidth', 2);
+%     hold on;
+%     plot([p0(1,:); p1(1,:)],[p0(2,:); p1(2,:)], 'g-', 'Linewidth', 3);
+%     hold on
+%     plot(p1(1,:),p1(2,:),'bo','Linewidth',2);
+%     disp(['Monocular initialization done!'])
     
 end
+end
+

@@ -1,5 +1,5 @@
-function [ currState, currPose, pastPoints] = processFrame(...
-    prevState, prevImage, currImage, K, pastPoints)
+function [ currState, currPose, dataBase] = processFrame(...
+    prevState, prevImage, currImage, K, dataBase)
 % prevState is a 5xk matrix where the columns corespond to 2D points on top
 % of the coresponding 3d points. k is the number of keypoints/landmarks
 
@@ -13,7 +13,7 @@ global descriptor_radius;
 global match_lambda;
 
 num_iterations = 500;
-pixel_tolerance = 1;
+pixel_tolerance = 3;
 k = 3;
 
 
@@ -120,122 +120,122 @@ currState = [matchedCurrKeypoints; matchedLandmarks];
 
 currPose = [R_C_W, t_C_W];
 
-%% START OF TRIANGULATION PART
-
-% Retrieves the Descriptors % Keypoints without a Landmark-match
-unMatchedIndices = ~ismember(currKeypoints', matchedCurrKeypoints','rows');
-% [V;U]
-currTriKeypoints = currKeypoints(:,unMatchedIndices);
-currTriDescriptors = currDescriptors(:,unMatchedIndices);
-
-    %First time running processFrame
-if isempty(pastPoints)%formerly known as tempstate
-    pastPoints = [double(currTriKeypoints);...
-        im2double(currTriDescriptors);...
-        repmat(currPose(:),1,length(currTriKeypoints(1,:)))];    
-else
-    %After first time
-    prevTriKeypoints = (pastPoints(1:2,:));%%pull previous keypoints from tempstate [v;u]
-    prevTriDescriptors = im2uint8(pastPoints(3:end-12,:));%pull descriptor for each prev keypoint
-    prevTriPoses = pastPoints(end-11:end,:);%pull all previous poses
-    
-    matches = matchDescriptors( currTriKeypoints, prevTriKeypoints, match_lambda);
-    % [V;U]
-    % For Triangulation
-    matchesList = matches(matches > 0);
-    matchedCurrTriKeypoints = currTriKeypoints(:, matches > 0);
-    matchedCurrTriDescriptors = currTriDescriptors(:, matches > 0);
-    % [V;U]
-    % ONLY Matched previous keypoints are kept:
-    matchedPrevTriKeypoints = prevTriKeypoints(:, matchesList);
-    matchedPrevTriDescriptors = prevTriDescriptors(:, matchesList);
-    matchedPrevTriPoses = prevTriPoses(:, matchesList);
-    % [V;U]
-    % Unmatched current keypoints are saved for future triangulation
-    unmatchedCurrTriKeypoints = currTriKeypoints(:, matches==0);
-    unmatchedCurrTriDescriptors = currTriDescriptors(:, matches==0);
-    
-    %% Bearing check
-    
-    %% Build segments from previous poses
-    
-    % Grouping Old Keypoints with same Pose, Segments = number of same pose
-    values = unique(matchedPrevTriPoses(end,:));
-    
-    if(length(values)==1)
-        segments = length(matchedPrevTriPoses(end,:));
-    else
-        segments = flipud(histcounts(matchedPrevTriPoses(end,:),[values inf])')';
-    end
-    %% FOR EACH SEGMENT, DO RANSAC IF SIZE>k otherwise discard totally
-    new_landmarks = [];
-    segment_val = 0;
-    
-    disp(['Sizes of segments: ' num2str(segments)])
-    
-    for i=1:length(segments)
-        
-        disp(['Frame being triangulated from segment ' num2str(i) ' out of ' num2str(length(segments))]);
-
-        segment_val_min = segment_val + 1;
-        segment_val = segments(i) + segment_val;
-
-        % Setting up for triangulation [U;V]
-        p1 = flipud(matchedPrevTriKeypoints(:,segment_val_min:segment_val));
-        p2 = flipud(matchedCurrTriKeypoints(:,segment_val_min:segment_val));
-        M1 =  K*reshape(matchedPrevTriPoses(:,segment_val_min),3,4);
-        M2 = K*currPose;
-        p1_hom = [p1; ones(1,size(p1,2))];
-        p2_hom = [p2; ones(1,size(p2,2))];
-        
-        normalized_p1 = K\p1_hom;%database
-        normalized_p2 = K\p2_hom;%query
-        
-        pose_p2 = R_C_W*normalized_p2;
-        
-        bearing_angles = atan2(norm(cross(normalized_p1,pose_p2)), dot(normalized_p1,pose_p2));
-        bearing_angles_deg = bearing_angles.*180./pi;    
-        ang_thrsh = 10;
-
-        P = linearTriangulation(p1_hom(:,bearing_angles_deg>ang_thrsh),p2_hom(:,bearing_angles_deg>ang_thrsh),M1,M2); %[U;V]
-        triangulated_keypoints = p2(:,bearing_angles_deg>ang_thrsh);
-        
-        %filter new points:
-        world_pose =-R_C_W'*t_C_W;
-        max_dif = [ 16; 2 ; 80];
-        min_dif = [-19; -8; 5];
-        PosZmax = P(3,:) > world_pose(3)+min_dif(3);
-        PosYmax = P(2,:) > world_pose(2)+min_dif(2);
-        PosXmax = P(1,:) > world_pose(1)+min_dif(1);
-        PosZmin = P(3,:) < world_pose(3)+max_dif(3);
-        PosYmin = P(2,:) < world_pose(2)+max_dif(2);
-        PosXmin = P(1,:) < world_pose(1)+max_dif(1);
-        disp([num2str(size(P,2)) ' New Triangulated points'])
-        Pos_count = PosZmax +PosYmax+PosXmax+PosZmin+PosYmin+PosXmin;
-        Pok = Pos_count==6;
-        P = P(:,Pok);
-        triangulated_keypoints = triangulated_keypoints(:,Pok);
-        
-        
-       
-        %[V;U]
-        new_landmarks = [new_landmarks,...
-            [flipud(triangulated_keypoints);P(1:3,:)]];
-    end
-    
-
-
-% COMMENT/UNCOMMENT to include new landmarks
-currState = [currState,new_landmarks];
-
-
-% Adding unmatch still vaild landmarks
-pastPoints = [pastPoints,...
-    [double(unmatchedCurrTriKeypoints);...
-    im2double(unmatchedCurrTriDescriptors);...
-    repmat(currPose(:),1,length(unmatchedCurrTriKeypoints(1,:)))]];
-    
-end
+% %% START OF TRIANGULATION PART
+% 
+% % Retrieves the Descriptors % Keypoints without a Landmark-match
+% unMatchedIndices = ~ismember(currKeypoints', matchedCurrKeypoints','rows');
+% % [V;U]
+% currTriKeypoints = currKeypoints(:,unMatchedIndices);
+% currTriDescriptors = currDescriptors(:,unMatchedIndices);
+% 
+%     %First time running processFrame
+% if isempty(pastPoints)%formerly known as tempstate
+%     pastPoints = [double(currTriKeypoints);...
+%         im2double(currTriDescriptors);...
+%         repmat(currPose(:),1,length(currTriKeypoints(1,:)))];    
+% else
+%     %After first time
+%     prevTriKeypoints = (pastPoints(1:2,:));%%pull previous keypoints from tempstate [v;u]
+%     prevTriDescriptors = im2uint8(pastPoints(3:end-12,:));%pull descriptor for each prev keypoint
+%     prevTriPoses = pastPoints(end-11:end,:);%pull all previous poses
+%     
+%     matches = matchDescriptors( currTriKeypoints, prevTriKeypoints, match_lambda);
+%     % [V;U]
+%     % For Triangulation
+%     matchesList = matches(matches > 0);
+%     matchedCurrTriKeypoints = currTriKeypoints(:, matches > 0);
+%     matchedCurrTriDescriptors = currTriDescriptors(:, matches > 0);
+%     % [V;U]
+%     % ONLY Matched previous keypoints are kept:
+%     matchedPrevTriKeypoints = prevTriKeypoints(:, matchesList);
+%     matchedPrevTriDescriptors = prevTriDescriptors(:, matchesList);
+%     matchedPrevTriPoses = prevTriPoses(:, matchesList);
+%     % [V;U]
+%     % Unmatched current keypoints are saved for future triangulation
+%     unmatchedCurrTriKeypoints = currTriKeypoints(:, matches==0);
+%     unmatchedCurrTriDescriptors = currTriDescriptors(:, matches==0);
+%     
+%     %% Bearing check
+%     
+%     %% Build segments from previous poses
+%     
+%     % Grouping Old Keypoints with same Pose, Segments = number of same pose
+%     values = unique(matchedPrevTriPoses(end,:));
+%     
+%     if(length(values)==1)
+%         segments = length(matchedPrevTriPoses(end,:));
+%     else
+%         segments = flipud(histcounts(matchedPrevTriPoses(end,:),[values inf])')';
+%     end
+%     %% FOR EACH SEGMENT, DO RANSAC IF SIZE>k otherwise discard totally
+%     new_landmarks = [];
+%     segment_val = 0;
+%     
+%     disp(['Sizes of segments: ' num2str(segments)])
+%     
+%     for i=1:length(segments)
+%         
+%         disp(['Frame being triangulated from segment ' num2str(i) ' out of ' num2str(length(segments))]);
+% 
+%         segment_val_min = segment_val + 1;
+%         segment_val = segments(i) + segment_val;
+% 
+%         % Setting up for triangulation [U;V]
+%         p1 = flipud(matchedPrevTriKeypoints(:,segment_val_min:segment_val));
+%         p2 = flipud(matchedCurrTriKeypoints(:,segment_val_min:segment_val));
+%         M1 =  K*reshape(matchedPrevTriPoses(:,segment_val_min),3,4);
+%         M2 = K*currPose;
+%         p1_hom = [p1; ones(1,size(p1,2))];
+%         p2_hom = [p2; ones(1,size(p2,2))];
+%         
+%         normalized_p1 = K\p1_hom;%database
+%         normalized_p2 = K\p2_hom;%query
+%         
+%         pose_p2 = R_C_W*normalized_p2;
+%         
+%         bearing_angles = atan2(norm(cross(normalized_p1,pose_p2)), dot(normalized_p1,pose_p2));
+%         bearing_angles_deg = bearing_angles.*180./pi;    
+%         ang_thrsh = 10;
+% 
+%         P = linearTriangulation(p1_hom(:,bearing_angles_deg>ang_thrsh),p2_hom(:,bearing_angles_deg>ang_thrsh),M1,M2); %[U;V]
+%         triangulated_keypoints = p2(:,bearing_angles_deg>ang_thrsh);
+%         
+%         %filter new points:
+%         world_pose =-R_C_W'*t_C_W;
+%         max_dif = [ 16; 2 ; 80];
+%         min_dif = [-19; -8; 5];
+%         PosZmax = P(3,:) > world_pose(3)+min_dif(3);
+%         PosYmax = P(2,:) > world_pose(2)+min_dif(2);
+%         PosXmax = P(1,:) > world_pose(1)+min_dif(1);
+%         PosZmin = P(3,:) < world_pose(3)+max_dif(3);
+%         PosYmin = P(2,:) < world_pose(2)+max_dif(2);
+%         PosXmin = P(1,:) < world_pose(1)+max_dif(1);
+%         disp([num2str(size(P,2)) ' New Triangulated points'])
+%         Pos_count = PosZmax +PosYmax+PosXmax+PosZmin+PosYmin+PosXmin;
+%         Pok = Pos_count==6;
+%         P = P(:,Pok);
+%         triangulated_keypoints = triangulated_keypoints(:,Pok);
+%         
+%         
+%        
+%         %[V;U]
+%         new_landmarks = [new_landmarks,...
+%             [flipud(triangulated_keypoints);P(1:3,:)]];
+%     end
+%     
+% 
+% 
+% % COMMENT/UNCOMMENT to include new landmarks
+% currState = [currState,new_landmarks];
+% 
+% 
+% % Adding unmatch still vaild landmarks
+% pastPoints = [pastPoints,...
+%     [double(unmatchedCurrTriKeypoints);...
+%     im2double(unmatchedCurrTriDescriptors);...
+%     repmat(currPose(:),1,length(unmatchedCurrTriKeypoints(1,:)))]];
+%     
+% end
 
 
 end
