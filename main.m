@@ -10,6 +10,8 @@ clc;
 
 dataset = 2; % 0: KITTI, 1: Malaga, 2: parking
 
+rng(1);
+
 % Tuning Parameters
 
 global harris_patch_size;
@@ -115,8 +117,8 @@ ransac = 1;
 [prevState,firstLandmarks] = monocular_intialization(img0,img1,ransac,K);
 prevImage = img1;
 
-figure('units','normalized','outerposition',[0 0 1 1]);
-%subplot(1, 3, 3); %uncomment to display images
+figure
+subplot(1, 3, 3); %uncomment to display images
 scatter3(firstLandmarks(1, :), firstLandmarks(2, :), firstLandmarks(3, :), 3,'b');
 set(gcf, 'GraphicsSmoothing', 'on');
 view(0,0);
@@ -151,15 +153,15 @@ for i = 2:last_frame
     % Distinguish success from failure.
     if (numel(R_C_W) > 0)
         
-%         subplot(1, 3, 3);
+        subplot(1, 3, 3);
         plotCoordinateFrame(R_C_W', -R_C_W'*t_C_W, 2,['r';'r';'r']);
         hold on
         scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
         view(0,0);
         hold off
         
-%         subplot(1, 3, [1 2]);
-%         imshow(currImage);
+        subplot(1, 3, [1 2]);
+        imshow(currImage);
     else
         disp(['Frame ' num2str(i) ' failed to localize!']);
     end
