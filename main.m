@@ -12,9 +12,6 @@ dataset = 2; % 0: KITTI, 1: Malaga, 2: parking
 
 % Tuning Parameters
 
-global K_parking; % declared when setting up paths
-global K_malaga;
-global K_kitti;
 global harris_patch_size;
 global harris_kappa;
 global num_keypoints;
@@ -25,6 +22,7 @@ global use_p3p;
 global pose_dist_threshold;
 global num_KLT_patches;
 global random_KLT_patches;
+global pixel_threshold;
 
 % Pose Estimation
 use_p3p = true;
@@ -33,13 +31,14 @@ use_p3p = true;
 % Randomly chosen parameters that seem to work well
 harris_patch_size = 9;
 harris_kappa = 0.07; % Magic number in range (0.04 to 0.15)
-num_keypoints = 800;
+num_keypoints = 1000;
 nonmaximum_supression_radius = 6;
 descriptor_radius = 9;
 match_lambda = 5;
 pose_dist_threshold = 0.10; % 10% used by Google Tango
 num_KLT_patches = 50; %number evenly spaced KLT patches
 random_KLT_patches = false;
+pixel_threshold = 1;
 
 
 %% set up relevant paths
@@ -116,7 +115,7 @@ ransac = 1;
 [prevState,firstLandmarks] = monocular_intialization(img0,img1,ransac,K);
 prevImage = img1;
 
-figure;
+figure('units','normalized','outerposition',[0 0 1 1]);
 %subplot(1, 3, 3); %uncomment to display images
 scatter3(firstLandmarks(1, :), firstLandmarks(2, :), firstLandmarks(3, :), 3,'b');
 set(gcf, 'GraphicsSmoothing', 'on');
@@ -127,9 +126,8 @@ axis([-15 10 -10 5 -1 40]);
 
 
 %% Continuous operation
-%range = (bootstrap_frames(2)+1):last_frame;
 range = 1:last_frame;
-dataBase = [];
+dataBase = cell(3,5);
 for i = 2:last_frame
     fprintf('\n\nProcessing frame %d\n=====================\n', i);
     if dataset == 0
@@ -152,25 +150,16 @@ for i = 2:last_frame
 
     % Distinguish success from failure.
     if (numel(R_C_W) > 0)
+        
+%         subplot(1, 3, 3);
         plotCoordinateFrame(R_C_W', -R_C_W'*t_C_W, 2,['r';'r';'r']);
         hold on
-       
-%         % Ground truth
-%         truePose = reshape(groundTruth(i+1, :), 4, 3)';
-%         rot = truePose(1:3,1:3);
-%         trans = truePose(:,4);
-%         plotCoordinateFrame(rot', rot*trans, 2,['b';'b';'b']);
-%         hold on
-
         scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
         view(0,0);
         hold off
         
-%         disp(['Rotation '])
-%         rotation_error = abs(R_C_W - rot)
-%         disp(['Translation '])
-%         translate_error = abs(t_C_W + trans)
-        
+%         subplot(1, 3, [1 2]);
+%         imshow(currImage);
     else
         disp(['Frame ' num2str(i) ' failed to localize!']);
     end

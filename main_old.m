@@ -14,7 +14,7 @@ groundTruth = load('data/poses/00.txt');
 pastPoints = [];%formerly known as tempstate
 
 figure;
-%subplot(1, 3, 3); %uncomment to display images
+subplot(1, 3, 3); %uncomment to display images
 scatter3(initialLandmarks(1, :), initialLandmarks(2, :), initialLandmarks(3, :), 3,'b');
 set(gcf, 'GraphicsSmoothing', 'on');
 view(0,0);

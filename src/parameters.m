@@ -9,6 +9,7 @@ global descriptor_radius;
 global match_lambda;
 global use_p3p;
 global pose_dist_threshold;
+global pixel_threshold;
 
 %% Pose Estimation
 use_p3p = true;
@@ -22,3 +23,4 @@ nonmaximum_supression_radius = 8;
 descriptor_radius = 9;
 match_lambda = 3;
 pose_dist_threshold = 0.10; % 10% used by Google Tango
+pixel_threshold = 1;
