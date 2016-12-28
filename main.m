@@ -87,8 +87,8 @@ end
 
 %% bootstrap / initialization of keypoint matching between adjacent frames
 
-% bootstrap_frames = [1 3]; % first and third frame
-bootstrap_frames = [95 97]; % first and third frame
+bootstrap_frames = [1 3]; % first and third frame
+%bootstrap_frames = [95 97]; % first and third frame
 
 if dataset == 0
     img0 = imread([kitti_path '/00/image_0/' ...
@@ -132,7 +132,7 @@ axis([-15 10 -10 5 -1 40]);
 %% Continuous operation
 range = 1:last_frame;
 dataBase = cell(3,5);
-for i = 96:last_frame
+for i = 1:last_frame
     fprintf('\n\nProcessing frame %d\n=====================\n', i);
     if dataset == 0
         currImage = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
