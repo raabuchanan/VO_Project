@@ -183,7 +183,7 @@ else
         p1_hom = [p1; ones(1,size(p1,2))];
         p2_hom = [p2; ones(1,size(p2,2))];
         
-        RANSAC = 0;
+        RANSAC = 1;
         
         if (RANSAC == 0)
             
@@ -241,7 +241,6 @@ else
                 % calculate epipolar line distance
 
                 d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
-                inlierIndx = intersect(find(d < pixel_threshold),find(bearing_angles_deg>ang_thrsh));
 
                 % all relevant elements on diagonal
                 inlierind = find(d < pixel_threshold);

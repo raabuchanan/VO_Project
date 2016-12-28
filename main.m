@@ -8,7 +8,7 @@ close all;
 clc;
 %% initialize variables
 
-dataset = 2; % 0: KITTI, 1: Malaga, 2: parking
+dataset = 0; % 0: KITTI, 1: Malaga, 2: parking
 
 rng(1);
 
@@ -87,7 +87,8 @@ end
 
 %% bootstrap / initialization of keypoint matching between adjacent frames
 
-bootstrap_frames = [1 3]; % first and third frame
+% bootstrap_frames = [1 3]; % first and third frame
+bootstrap_frames = [95 97]; % first and third frame
 
 if dataset == 0
     img0 = imread([kitti_path '/00/image_0/' ...
@@ -113,11 +114,12 @@ end
 % 1 for ransac 'yes'
 ransac = 1;
 
- fprintf('\n\nProcessing frame %d\n=====================\n', 1);
+ fprintf('\n\nProcessing frame %d\n=====================\n', bootstrap_frames(1));
 [prevState,firstLandmarks] = monocular_intialization(img0,img1,ransac,K);
 prevImage = img1;
 
 figure
+set(gcf,'Position',[-1854 1 1855 1001])
 subplot(1, 3, 3); %uncomment to display images
 scatter3(firstLandmarks(1, :), firstLandmarks(2, :), firstLandmarks(3, :), 3,'b');
 set(gcf, 'GraphicsSmoothing', 'on');
@@ -130,15 +132,16 @@ axis([-15 10 -10 5 -1 40]);
 %% Continuous operation
 range = 1:last_frame;
 dataBase = cell(3,5);
-for i = 2:last_frame
+for i = 96:last_frame
     fprintf('\n\nProcessing frame %d\n=====================\n', i);
     if dataset == 0
         currImage = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
-        
+        [currState, currPose, dataBase] = processFrame(prevState, prevImage, currImage, K, dataBase);
     elseif dataset == 1
         currImage = rgb2gray(imread([malaga_path ...
             '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
-            left_images(i).name]));        
+            left_images(i).name]));
+        [currState, currPose, dataBase] = processFrame(prevState, prevImage, currImage, K, dataBase);
     elseif dataset == 2
         currImage = im2uint8(rgb2gray(imread([parking_path ...
             sprintf('/images/img_%05d.png',i)])));
@@ -155,8 +158,8 @@ for i = 2:last_frame
         
         subplot(1, 3, 3);
         plotCoordinateFrame(R_C_W', -R_C_W'*t_C_W, 2,['r';'r';'r']);
-        hold on
-        scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
+%         hold on
+%         scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
         view(0,0);
         hold off
         
