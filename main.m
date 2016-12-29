@@ -32,15 +32,15 @@ use_p3p = true;
 % Harris Corner Detector Parameters
 % Randomly chosen parameters that seem to work well
 harris_patch_size = 9;
-harris_kappa = 0.07; % Magic number in range (0.04 to 0.15)
-num_keypoints = 1000;
+harris_kappa = 0.05; % Magic number in range (0.04 to 0.15)
+num_keypoints = 2000;
 nonmaximum_supression_radius = 6;
 descriptor_radius = 9;
-match_lambda = 5;
+match_lambda = 4;
 pose_dist_threshold = 0.10; % 10% used by Google Tango
 num_KLT_patches = 50; %number evenly spaced KLT patches
 random_KLT_patches = false;
-pixel_threshold = 1;
+pixel_threshold = 2;
 
 
 %% set up relevant paths
@@ -63,6 +63,8 @@ if dataset == 0
     K = [7.188560000000e+02 0 6.071928000000e+02
         0 7.188560000000e+02 1.852157000000e+02
         0 0 1];
+    groundTruth = load('kitti/poses/00.txt');
+    
 elseif dataset == 1
     % Path containing the many files of Malaga 7.
     assert(exist(malaga_path) ~= 0);
@@ -87,8 +89,8 @@ end
 
 %% bootstrap / initialization of keypoint matching between adjacent frames
 
-bootstrap_frames = [1 3]; % first and third frame
-%bootstrap_frames = [95 97]; % first and third frame
+% bootstrap_frames = [1 3]; % first and third frame
+bootstrap_frames = [95 97];
 
 if dataset == 0
     img0 = imread([kitti_path '/00/image_0/' ...
@@ -126,13 +128,13 @@ set(gcf, 'GraphicsSmoothing', 'on');
 view(0,0);
 axis equal;
 axis vis3d;
-axis([-15 10 -10 5 -1 40]);
+axis([-15 15 -20 5 -20 30]);
 
 
 %% Continuous operation
 range = 1:last_frame;
 dataBase = cell(3,5);
-for i = 1:last_frame
+for i = 96:last_frame
     fprintf('\n\nProcessing frame %d\n=====================\n', i);
     if dataset == 0
         currImage = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
@@ -158,8 +160,22 @@ for i = 1:last_frame
         
         subplot(1, 3, 3);
         plotCoordinateFrame(R_C_W', -R_C_W'*t_C_W, 2,['r';'r';'r']);
-%         hold on
-%         scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
+        hold on
+%         if (dataset==0)
+%             % Plot ground truth based on Dataset
+%             truePose = reshape(groundTruth(i+1, :), 4, 3)';
+%             rot = truePose(1:3,1:3);
+%             trans = truePose(:,4);
+%             plotCoordinateFrame(rot', rot*trans, 2,['b';'b';'b']);
+%             hold on    
+%         end
+        delete(findobj(gca, 'type', 'patch'));
+        if(exist('currentLandmarks'))
+            delete(currentLandmarks)
+        end
+        pos = -R_C_W'*t_C_W;
+%         currentLandmarks = scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
+        axis([pos(1)-15 pos(1)+15 pos(2)-20 pos(2)+5 pos(3)-10 pos(3)+30]);
         view(0,0);
         hold off
         

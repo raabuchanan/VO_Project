@@ -13,7 +13,7 @@ global descriptor_radius;
 global match_lambda;
 global pixel_threshold;
 
-num_iterations = 500;
+num_iterations = 4000;
 pixel_tolerance = 3;
 k = 3;
 
@@ -107,8 +107,14 @@ end
 
 if max_num_inliers == 0
     disp(['Impossible to create new Pose']);
-    R_C_W = [];
-    t_C_W = [];
+    threeAgo = [reshape(dataBase{3,3},3,4);[0,0,0,1]];
+    twoAgo = [reshape(dataBase{3,4},3,4);[0,0,0,1]];
+    change = threeAgo\twoAgo;
+    next = change*change*twoAgo;
+    R_C_W = next(1:3,1:3);%returning previous pose
+    t_C_W = next(1:3,4);
+%     R_C_W = [];
+%     t_C_W = [];
 else
     R_C_W = best_R_C_W_guess;
     t_C_W = best_T_C_W_guess;
@@ -183,7 +189,7 @@ else
         p1_hom = [p1; ones(1,size(p1,2))];
         p2_hom = [p2; ones(1,size(p2,2))];
         
-        RANSAC = 1;
+        RANSAC = 0;
         
         if (RANSAC == 0)
             
@@ -199,13 +205,46 @@ else
 
             bearing_angles = atan2(norm(cross(normalized_p1,pose_p2)), dot(normalized_p1,pose_p2));
             bearing_angles_deg = bearing_angles.*180./pi;    
-            ang_thrsh = 30;
+            ang_thrsh = 40;
             
             d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
-            inlierIndx = intersect(find(d < pixel_threshold),find(bearing_angles_deg>ang_thrsh));
+            inlierIndx = find(d<pixel_threshold);
+%             inlierIndx = intersect(find(d < pixel_threshold),find(bearing_angles_deg>ang_thrsh));
 
             P = linearTriangulation(p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),M1,M2); %[U;V]
             triangulated_keypoints = p2(:,inlierIndx);
+            
+            
+%             % Estimate the essential matrix E using the 8-point algorithm
+%             E = estimateEssentialMatrix(p1_hom, p2_hom, K, K);
+%             % Extract the relative camera positions (R,T) from the essential matrix
+%             % Obtain extrinsic parameters (R,t) from E
+%             [Rots,u3] = decomposeEssentialMatrix(E);
+%             % Disambiguate among the four possible configurations
+%             [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p1_hom,p2_hom,K,K);
+%             % Triangulate a point cloud using the final transformation (R,T)
+%             M1 = K*reshape(prevTriPose,3,4);
+%             M2 = [[R_C2_W, T_C2_W];0,0,0,1]*[reshape(prevTriPose,3,4);0,0,0,1];
+%             M2 = K*M2(1:3,1:4);
+%             
+%             normalized_p1 = K\p1_hom;%database
+%             normalized_p2 = K\p2_hom;%query
+% 
+%             pose_p2 = R_C2_W*normalized_p2;
+%             
+%             F_candidate = fundamentalEightPoint_normalized(p1_hom,p2_hom);
+%             
+%             bearing_angles = atan2(norm(cross(normalized_p1,pose_p2)), dot(normalized_p1,pose_p2));
+%             bearing_angles_deg = bearing_angles.*180./pi;    
+%             ang_thrsh = 40;
+%             
+%             d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
+% %             inlierIndx = intersect(find(d < pixel_threshold),find(bearing_angles_deg<ang_thrsh));
+%             inlierIndx = find(d<pixel_threshold);
+%             
+%             P = linearTriangulation(p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),M1,M2); %[U;V]
+%             triangulated_keypoints = p2(:,inlierIndx);
+            
         else
             
             % Dummy initialization of RANSAC variables
@@ -234,6 +273,10 @@ else
                 [~, idx] = datasample(P(1:3,:),k,2,'Replace',false);
                 p1_sample = p1_hom(:,idx);
                 p2_sample = p2_hom(:,idx);
+                
+                if all(p1_sample(1,:) == p1_sample(1,1))
+                    test = 0;
+                end
 
                 F_candidate = fundamentalEightPoint_normalized(p1_sample,p2_sample);
                 % E_candidate = estimateEssentialMatrix(p1_sample,p2_sample,K,K);
@@ -279,21 +322,21 @@ else
         
 
         showMatchedFeatures(prevImage, currImage, p1(:,inlierIndx)',p2(:,inlierIndx)')
-        %filter new points:
-        world_pose =-R_C_W'*t_C_W;
-        max_dif = [ 16; 2 ; 80];
-        min_dif = [-19; -8; 5];
-        PosZmax = P(3,:) > world_pose(3)+min_dif(3);
-        PosYmax = P(2,:) > world_pose(2)+min_dif(2);
-        PosXmax = P(1,:) > world_pose(1)+min_dif(1);
-        PosZmin = P(3,:) < world_pose(3)+max_dif(3);
-        PosYmin = P(2,:) < world_pose(2)+max_dif(2);
-        PosXmin = P(1,:) < world_pose(1)+max_dif(1);
         disp([num2str(size(P,2)) ' New Triangulated points'])
-        Pos_count = PosZmax +PosYmax+PosXmax+PosZmin+PosYmin+PosXmin;
-        Pok = Pos_count==6;
-        P = P(:,Pok);
-        triangulated_keypoints = triangulated_keypoints(:,Pok);
+        %filter new points:
+%         world_pose =-R_C_W'*t_C_W;
+%         max_dif = [ 30; 2 ; 80];
+%         min_dif = [-30; -8; 5];
+%         PosZmax = P(3,:) > world_pose(3)+min_dif(3);
+%         PosYmax = P(2,:) > world_pose(2)+min_dif(2);
+%         PosXmax = P(1,:) > world_pose(1)+min_dif(1);
+%         PosZmin = P(3,:) < world_pose(3)+max_dif(3);
+%         PosYmin = P(2,:) < world_pose(2)+max_dif(2);
+%         PosXmin = P(1,:) < world_pose(1)+max_dif(1);
+%         Pos_count = PosZmax +PosYmax+PosXmax+PosZmin+PosYmin+PosXmin;
+%         Pok = Pos_count==6;
+%         P = P(:,Pok);
+%         triangulated_keypoints = triangulated_keypoints(:,Pok);
         
         
        
