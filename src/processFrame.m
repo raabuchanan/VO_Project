@@ -13,7 +13,7 @@ global descriptor_radius;
 global match_lambda;
 global pixel_threshold;
 
-num_iterations = 4000;
+num_iterations = 2000;
 pixel_tolerance = 3;
 k = 3;
 
@@ -53,7 +53,7 @@ max_num_inliers_history = zeros(1, num_iterations);
 max_num_inliers = 0;
 
 for i = 1:num_iterations
-    [landmark_sample, idx] = datasample(matchedLandmarks, k, 2, 'Replace', true);
+    [landmark_sample, idx] = datasample(matchedLandmarks, k, 2, 'Replace', false);
     keypoint_sample = matchedCurrKeypoints(:, idx);
 
 
@@ -107,14 +107,14 @@ end
 
 if max_num_inliers == 0
     disp(['Impossible to create new Pose']);
-    threeAgo = [reshape(dataBase{3,3},3,4);[0,0,0,1]];
-    twoAgo = [reshape(dataBase{3,4},3,4);[0,0,0,1]];
-    change = threeAgo\twoAgo;
-    next = change*change*twoAgo;
-    R_C_W = next(1:3,1:3);%returning previous pose
-    t_C_W = next(1:3,4);
-%     R_C_W = [];
-%     t_C_W = [];
+%     threeAgo = [reshape(dataBase{3,3},3,4);[0,0,0,1]];
+%     twoAgo = [reshape(dataBase{3,4},3,4);[0,0,0,1]];
+%     change = threeAgo\twoAgo;
+%     next = change*change*twoAgo;
+%     R_C_W = next(1:3,1:3);%returning previous pose
+%     t_C_W = next(1:3,4);
+    R_C_W = [];
+    t_C_W = [];
 else
     R_C_W = best_R_C_W_guess;
     t_C_W = best_T_C_W_guess;
@@ -189,7 +189,7 @@ else
         p1_hom = [p1; ones(1,size(p1,2))];
         p2_hom = [p2; ones(1,size(p2,2))];
         
-        RANSAC = 0;
+        RANSAC = 1;
         
         if (RANSAC == 0)
             
@@ -324,19 +324,19 @@ else
         showMatchedFeatures(prevImage, currImage, p1(:,inlierIndx)',p2(:,inlierIndx)')
         disp([num2str(size(P,2)) ' New Triangulated points'])
         %filter new points:
-%         world_pose =-R_C_W'*t_C_W;
-%         max_dif = [ 30; 2 ; 80];
-%         min_dif = [-30; -8; 5];
-%         PosZmax = P(3,:) > world_pose(3)+min_dif(3);
-%         PosYmax = P(2,:) > world_pose(2)+min_dif(2);
-%         PosXmax = P(1,:) > world_pose(1)+min_dif(1);
-%         PosZmin = P(3,:) < world_pose(3)+max_dif(3);
-%         PosYmin = P(2,:) < world_pose(2)+max_dif(2);
-%         PosXmin = P(1,:) < world_pose(1)+max_dif(1);
-%         Pos_count = PosZmax +PosYmax+PosXmax+PosZmin+PosYmin+PosXmin;
-%         Pok = Pos_count==6;
-%         P = P(:,Pok);
-%         triangulated_keypoints = triangulated_keypoints(:,Pok);
+        world_pose =-R_C_W'*t_C_W;
+        max_dif = [ 20; 2 ; 80];
+        min_dif = [-20; -8; 5];
+        PosZmax = P(3,:) > world_pose(3)+min_dif(3);
+        PosYmax = P(2,:) > world_pose(2)+min_dif(2);
+        PosXmax = P(1,:) > world_pose(1)+min_dif(1);
+        PosZmin = P(3,:) < world_pose(3)+max_dif(3);
+        PosYmin = P(2,:) < world_pose(2)+max_dif(2);
+        PosXmin = P(1,:) < world_pose(1)+max_dif(1);
+        Pos_count = PosZmax +PosYmax+PosXmax+PosZmin+PosYmin+PosXmin;
+        Pok = Pos_count==6;
+        P = P(:,Pok);
+        triangulated_keypoints = triangulated_keypoints(:,Pok);
         
         
        

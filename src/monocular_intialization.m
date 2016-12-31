@@ -1,4 +1,4 @@
-function [prevState,firstLandmarks] = monocular_intialization(img0,img1,ransac,K)
+function [firstKeypoints,firstLandmarks] = monocular_intialization(img0,img1,ransac,K)
 %function [firstState,firstLandmarks] = monocular_initialization(img0,img1,ransac,dataset)
 
 % indicate first two images for bootstrapping
@@ -161,8 +161,10 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
         M0 = K * eye(3,4);
         M1 = K * [R_C2_W, T_C2_W];
         firstLandmarks = linearTriangulation(p0,p1,M0,M1);
+        
+        firstKeypoints = flipud(p1(1:2,:));
 
-        prevState = [flipud(p1(1:2,:));firstLandmarks];
+        %prevState = [flipud(p1(1:2,:));firstLandmarks];
 
     end
 end
