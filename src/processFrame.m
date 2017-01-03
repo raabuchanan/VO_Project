@@ -107,23 +107,22 @@ end
 
 if max_num_inliers == 0
     disp(['Impossible to create new Pose']);
-%     threeAgo = [reshape(dataBase{3,3},3,4);[0,0,0,1]];
-%     twoAgo = [reshape(dataBase{3,4},3,4);[0,0,0,1]];
-%     change = threeAgo\twoAgo;
-%     next = change*change*twoAgo;
-%     R_C_W = next(1:3,1:3);%returning previous pose
-%     t_C_W = next(1:3,4);
-    R_C_W = [];
-    t_C_W = [];
+
+     currState = [];
+     currPose = [];
+     return
+
 else
     R_C_W = best_R_C_W_guess;
     t_C_W = best_T_C_W_guess;
 end
 
+
 % back to [V;U]
 matchedCurrKeypoints = flipud(matchedCurrKeypoints);
 
 currState = [matchedCurrKeypoints; matchedLandmarks];
+
 
 currPose = [R_C_W, t_C_W];
 
@@ -143,7 +142,7 @@ new_landmarks = [];
 emptyColumns = find(cellfun(@isempty,dataBase(1,:)));
 
 if(isempty(emptyColumns))
-    dataBaseLength = 5;
+    dataBaseLength = 3;
 else
     dataBaseLength = min(emptyColumns) - 1;
 end
@@ -324,18 +323,23 @@ else
         showMatchedFeatures(prevImage, currImage, p1(:,inlierIndx)',p2(:,inlierIndx)')
         disp([num2str(size(P,2)) ' New Triangulated points'])
         %filter new points:
-        world_pose =-R_C_W'*t_C_W;
-        max_dif = [ 20; 2 ; 80];
-        min_dif = [-20; -8; 5];
-        PosZmax = P(3,:) > world_pose(3)+min_dif(3);
-        PosYmax = P(2,:) > world_pose(2)+min_dif(2);
-        PosXmax = P(1,:) > world_pose(1)+min_dif(1);
-        PosZmin = P(3,:) < world_pose(3)+max_dif(3);
-        PosYmin = P(2,:) < world_pose(2)+max_dif(2);
-        PosXmin = P(1,:) < world_pose(1)+max_dif(1);
-        Pos_count = PosZmax +PosYmax+PosXmax+PosZmin+PosYmin+PosXmin;
-        Pok = Pos_count==6;
+         world_pose =-R_C_W'*t_C_W;
+        max_dif = [ 0.5; 0.5; 0.5];
+        min_dif = [-0.5; -0.5; -0.5];
+        inFront = R_C_W(3,1:3)*(P(1:3,:)-world_pose) > 0;
+        
+        PosZmax = P(3,:) < world_pose(3)+min_dif(3);
+        PosYmax = P(2,:) < world_pose(2)+min_dif(2);
+        PosXmax = P(1,:) < world_pose(1)+min_dif(1);
+        
+        PosZmin = P(3,:) > world_pose(3)+max_dif(3);
+        PosYmin = P(2,:) > world_pose(2)+max_dif(2);
+        PosXmin = P(1,:) > world_pose(1)+max_dif(1);
+        Pos_count = PosZmax+PosYmax+PosXmax+PosZmin+PosYmin+PosXmin+inFront;
+        Pok = Pos_count==4;
         P = P(:,Pok);
+
+        disp([num2str(size(P,2)) ' Tiangulated points within bounds'])
         triangulated_keypoints = triangulated_keypoints(:,Pok);
         
         
@@ -353,9 +357,9 @@ currState = [currState,new_landmarks];
 % Clean up and add to data base
 if(isempty(emptyColumns))
     dataBase(:,1) = []; % delete oldest frame
-    dataBase{1,5} = unmatchedCurrTriKeypoints; %2xM keypoints
-    dataBase{2,5} = unmatchedCurrTriDescriptors; %NxM descriptors
-    dataBase{3,5} = currPose(:); %12x1 pose
+    dataBase{1,3} = unmatchedCurrTriKeypoints; %2xM keypoints
+    dataBase{2,3} = unmatchedCurrTriDescriptors; %NxM descriptors
+    dataBase{3,3} = currPose(:); %12x1 pose
 else
     dataBase{1,min(emptyColumns)} = unmatchedCurrTriKeypoints; %2xM keypoints
     dataBase{2,min(emptyColumns)} = unmatchedCurrTriDescriptors; %NxM descriptors

@@ -1,4 +1,4 @@
-function [firstKeypoints,firstLandmarks] = monocular_intialization(img0,img1,ransac,K)
+function [firstKeypoints,firstLandmarks] = monocular_intialization(img0,img1,ransac,K,initialPose)
 %function [firstState,firstLandmarks] = monocular_initialization(img0,img1,ransac,dataset)
 
 % indicate first two images for bootstrapping
@@ -58,7 +58,7 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
         %T_C1_W = u3;
 
         % Triangulate a point cloud using the final transformation (R,T)
-        M0 = K * eye(3,4); % transformation from frame 0 to frame 0
+        M0 = K *initialPose; % transformation from frame 0 to frame 0
         M1 = K * [R_C1_W, T_C1_W]; % transformation from frame 0 to frame 1
         % homogeneous representation of 3D coordinates
         P = linearTriangulation(p0,p1,M0,M1);
@@ -104,7 +104,7 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
         [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p0,p1,K,K);
 
         % Triangulate a point cloud using the final transformation (R,T)
-        M0 = K * eye(3,4);
+        M0 = K * initialPose;
         M1 = K * [R_C2_W, T_C2_W];
         P = linearTriangulation(p0,p1,M0,M1);
 
@@ -158,7 +158,7 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
         % Disambiguate among the four possible configurations
         [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p0,p1,K,K);
         % Triangulate a point cloud using the final transformation (R,T)
-        M0 = K * eye(3,4);
+        M0 = K * initialPose;
         M1 = K * [R_C2_W, T_C2_W];
         firstLandmarks = linearTriangulation(p0,p1,M0,M1);
         

@@ -7,7 +7,7 @@ clear all;
 close all;
 clc;
 %% initialize variables
-
+format shortG
 dataset = 0; % 0: KITTI, 1: Malaga, 2: parking
 
 rng(1);
@@ -117,7 +117,7 @@ end
 ransac = 1;
 
  fprintf('\n\nProcessing frame %d\n=====================\n', bootstrap_frames(1));
-[firstKeypoints,firstLandmarks] = monocular_intialization(img0,img1,ransac,K);
+[firstKeypoints,firstLandmarks] = monocular_intialization(img0,img1,ransac,K,eye(3,4));
 prevImage = img1;
 prevState = [firstKeypoints;firstLandmarks(1:3,:)];
 
@@ -134,8 +134,8 @@ axis([-15 15 -20 5 -20 30]);
 
 %% Continuous operation
 range = 1:last_frame;
-dataBase = cell(3,5);
-for i = 2:last_frame
+dataBase = cell(3,3);
+for i = 1:last_frame
     fprintf('\n\nProcessing frame %d\n=====================\n', i);
     if dataset == 0
         currImage = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
@@ -151,6 +151,15 @@ for i = 2:last_frame
         [currState, currPose, dataBase] = processFrame(prevState, prevImage, currImage, K, dataBase);
     else
         assert(false);
+    end
+    
+    %check to see if we're lose and if so, re initialize
+    if(isempty(currState))
+        twoImagesAge = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i-2)]);
+        currPose = reshape(dataBase{3,2},3,4);%two poses ago
+        [firstKeypoints,firstLandmarks] = monocular_intialization(twoImagesAge,currImage,ransac,K,currPose);
+        currState = [firstKeypoints;firstLandmarks(1:3,:)];
+        prevState = ones(5,size(currState,2));
     end
     
     R_C_W = currPose(:,1:3)
@@ -175,8 +184,10 @@ for i = 2:last_frame
             delete(currentLandmarks)
         end
         pos = -R_C_W'*t_C_W;
-        currentLandmarks = scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
-        axis([pos(1)-15 pos(1)+15 pos(2)-20 pos(2)+5 pos(3)-10 pos(3)+30]);
+        idx = ~ismember(currState(3:5,:)',prevState(3:5,:)','rows');
+        test = currState(3:5,idx);
+        currentLandmarks = scatter3(test(1, :), test(2, :), test(3, :), 5,'r','filled');
+        axis([pos(1)-25 pos(1)+25 pos(2)-20 pos(2)+5 pos(3)-10 pos(3)+30]);
         view(0,0);
         hold off
         
