@@ -1,143 +1,384 @@
-function [currState, currPose] = processFrame_KLT(...
-    prevState, prevImage, currImage)
-% cs, rb, al, me
-% hs 2016, eth z?rich
-% Information about the input and output
+function [ currState, currPose, dataBase] = processFrame(...
+    prevState, prevImage, currImage, K, dataBase)
+% prevState is a 5xk matrix where the columns corespond to 2D points on top
+% of the coresponding 3d points. k is the number of keypoints/landmarks
 
-%%%% Inputs: %%%
-% prevState: A 20xM matrix describing the previous image state, where the 
-%            first 2 lines are the candidate keypoints of the previous
-%            image (c_m^i), the second 2 lines are the instant keypoints found in a
-%            previous image (c_m^(i-L_m)) with the corresponding pose
-%            matrix in lines 5 to 20 (T_C_W^(i-L_m)) where L_m is the
-%            length of the keypoint track
-% prevImage: The image of the previous state
-% currImage: The current image
+addpath(genpath('../../all_solns'))
 
-%%%% Outputs: %%%
-% currState: A 20xM describing the current image state, ... see prevState
-% currPose:  The camera pose of the current image (T_C_W^i)
+global harris_patch_size;
+global harris_kappa;
+global num_keypoints;
+global nonmaximum_supression_radius;
+global descriptor_radius;
+global match_lambda;
+global pixel_threshold;
 
-%% 
-
-% get keypoints from first image (initialization)
-% find landmarks with the help of 1st and 3rd image (example)
-% strategy: get prevState 
-
-% Apply tracker (KLT) for each keypoint in the current image. If KLT
-% successful, update c_m^i of prevState to tracked point and match with
-% first instance of this keypoint
-% meanwhile discard all keypoints that did not fulfill criterium (KLT error
-% too large)
-
-% also store keypoint track gamma for each keypoint...
-% If L_m is large enough triangulate points (how large should L_m be?)
-% calculate bearing vector of first observation and current bearing vector;
-% if it is above some threshold, good results.
+num_iterations = 500;
+pixel_tolerance = 3;
+k = 3;
 
 
-prevKeypoints = prevState(1:2,:);
-firstOccurrence = prevState(3:4,:);
-firstTransform = prevState(5:20,:);
+%% Process prevImage
 
-TemplateRect{1} = [086,111; 100,134];
-TemplateRect{2} = [054,091; 224,256];
-TemplateRect{3} = [093,103; 285,312];
-TemplateRect{4} = [154,171; 250,266];
+% prevKeypoints = prevState(1:2,:); % [V;U]
+% prevLandmarks = prevState(3:5,:); %[X;Y;Z]
 
-% Plot templates
-color = rand(4,3);
-for k=1:numel(TemplateRect)
-    v = flipud(TemplateRect{k});
-    v = [v(1,1) v(1,1) v(1,2) v(1,2);
-         v(2,1) v(2,2) v(2,2) v(2,1)];
-    hold on,
-    plot_quadrilateral(v, color(k,:));
-end
+%prevDescriptors = describeKeypoints(prevImage, prevKeypoints, descriptor_radius);
 
-% Save image and to disk
-set(gcf,'PaperPositionMode','auto')
-print('-dpng','-r0',['picture' num2str(1)])
+% Options.TranslationIterations = 15;
+% Options.AffineIterations = 5;
 
-% Pad templates with extra boundary pixels (not used for the actual template
-% tracking, but for smooth image derivatives).
-b = 5; % pixels
-padding = [-b,b;-b,b];
-for k=1:numel(TemplateRect)
-    TemplateRect{k} = TemplateRect{k} + padding;
+currState = prevState;
+
+for i=1:size(prevState,2)
+[currState{1,i},~,~] = ...
+    LucasKanadeAffine(im2double(currImage),prevState{1,i},prevState{2,i});
 end
 
 
-% -Set initial parameters of the templates
-% -Set padded template image.
+
+% %% Process currImage
+% % Calculate Harris scores
+% currHarrisScores = harris(currImage, harris_patch_size, harris_kappa);
+% assert(min(size(currHarrisScores) == size(currImage)));
 % 
-% Affine Transformation Matrix is used in Lucas Kanade Tracking
-% with 6 parameters
-% M    = [ 1+p(1) p(3)   p(5); 
-%          p(2)   1+p(4) p(6); 
-%          0      0      1];
-%
+% % Select keypoints [V; U]
+% currKeypoints = selectKeypoints(...
+%     currHarrisScores, num_keypoints, nonmaximum_supression_radius);
+% 
+% % Get Descriptors
+% currDescriptors = describeKeypoints(currImage, currKeypoints, descriptor_radius);
+% 
+% %% Find Matches in two images
+% 
+% matches = matchDescriptors( currDescriptors, prevDescriptors, match_lambda);
+% % [V;U]
+% matchedCurrKeypoints = currKeypoints(:, matches > 0);
+% matchedLandmarks = prevLandmarks(:, matches(matches > 0));
 
-% Make a struct to store templates
-TemplateData = struct;
-for k=1:numel(TemplateRect)
-    w = TemplateRect{k};
-    center = [w(1,1)+w(1,2)-1 w(2,1)+w(2,2)-1]/2; % center of the template, in image coordinates.
-    TemplateData(k).p = [0 0 0 0 center(1) center(2)]; % parameters for the affine warp of the template
-    TemplateData(k).image = I(w(1,1):w(1,2), w(2,1):w(2,2)); % pixels of the template
+%% RANSAC
+
+% Initialize RANSAC.
+% [U;V]
+currWrap = cell2mat(currState(1,:));
+matchedCurrKeypoints = flipud(currWrap(5:6,:));
+matchedLandmarks = cell2mat(currState(3,:));
+
+
+max_num_inliers_history = zeros(1, num_iterations);
+max_num_inliers = 0;
+
+for i = 1:num_iterations
+    [landmark_sample, idx] = datasample(matchedLandmarks, k, 2, 'Replace', false);
+    keypoint_sample = matchedCurrKeypoints(:, idx);
+
+
+    normalized_bearings = K\[keypoint_sample; ones(1, 3)];
+    for ii = 1:3
+        normalized_bearings(:, ii) = normalized_bearings(:, ii) / ...
+            norm(normalized_bearings(:, ii), 2);
+    end
+    
+    poses = p3p(landmark_sample, normalized_bearings);
+    R_C_W_guess = zeros(3, 3, 2);
+    t_C_W_guess = zeros(3, 1, 2);
+    for ii = 0:1
+        R_W_C_ii = real(poses(:, (2+ii*4):(4+ii*4)));
+        t_W_C_ii = real(poses(:, (1+ii*4)));
+        R_C_W_guess(:,:,ii+1) = R_W_C_ii';
+        t_C_W_guess(:,:,ii+1) = -R_W_C_ii'*t_W_C_ii;
+    end
+
+    
+    % Count inliers for guess 1
+    projected_points = projectPoints(...
+        (R_C_W_guess(:,:,1) * matchedLandmarks) + repmat(t_C_W_guess(:,:,1), ...
+        [1 size(matchedLandmarks, 2)]), K);
+    difference = matchedCurrKeypoints - projected_points;
+    errors = sum(difference.^2, 1);
+    inliers = errors < pixel_tolerance^2;
+    guess = 1;
+    
+    % Count inliers for guess 2
+    projected_points = projectPoints(...
+        (R_C_W_guess(:,:,2) * matchedLandmarks) + repmat(t_C_W_guess(:,:,2), ...
+        [1 size(matchedLandmarks, 2)]), K);
+    difference = matchedCurrKeypoints - projected_points;
+    errors = sum(difference.^2, 1);
+    inliers_guess_2 = errors < pixel_tolerance^2;
+    
+    if nnz(inliers_guess_2) > nnz(inliers)
+        inliers = inliers_guess_2;
+        guess = 2;
+    end
+    
+    if nnz(inliers) > max_num_inliers
+        max_num_inliers = nnz(inliers);
+        best_R_C_W_guess = R_C_W_guess(:,:,guess);
+        best_T_C_W_guess = t_C_W_guess(:,:,guess);
+    end
+    
+    max_num_inliers_history(i) = max_num_inliers;
 end
 
-%%
-% LK Tracking Options (default values for other options)
-Options.TranslationIterations = 15;
-Options.AffineIterations = 5;
-
-% Make a colormap
-cmap = hot(256);
-
-% Matrix to store squared pixel error between template and ROI in
-% movieframe after template tracking.
-T_error = zeros(size(,3), length(TemplateData));
-
-I = double(Vmovie(:,:,i))*(1/255);
-
-% Do the tracking for all templates, using the Lucas-Kanade method
-for k=1:length(TemplateData)
-    [TemplateData(k).p,ROIimage,T_error(i,k)] = ...
-        LucasKanadeAffine(I,TemplateData(k).p,TemplateData(k).image,Options);
+if max_num_inliers == 0
+    disp(['Impossible to create new Pose']);
+%     threeAgo = [reshape(dataBase{3,3},3,4);[0,0,0,1]];
+%     twoAgo = [reshape(dataBase{3,4},3,4);[0,0,0,1]];
+%     change = threeAgo\twoAgo;
+%     next = change*change*twoAgo;
+%     R_C_W = next(1:3,1:3);%returning previous pose
+%     t_C_W = next(1:3,4);
+    R_C_W = [];
+    t_C_W = [];
+else
+    R_C_W = best_R_C_W_guess;
+    t_C_W = best_T_C_W_guess;
 end
 
+% back to [V;U]
+matchedCurrKeypoints = flipud(matchedCurrKeypoints);
 
-% Show the location of the templates in the movie frame
-figure(1), imshow(I); % Show the movie frame
-title(['Frame ' num2str(i)]) % Display the frame number on top of the image
-set(gcf,'Color','w'); axis on,
-hold on
+% currState = [matchedCurrKeypoints; matchedLandmarks];
 
-% Display the tracked templates
-plot(TemplateData(k).p(6),TemplateData(k).p(5),'go',...
-    'MarkerFaceColor',cmap(round(255 * k/length(TemplateData))+1,:));
+currPose = [R_C_W, t_C_W];
 
-% Get vertices of the template
-[template_height, template_width] = size(TemplateData(k).image);
-halfw = template_width/2 - b;
-halfh = template_height/2 - b;
-% Compute the position of the vertices of the (warped) template...
-p = TemplateData(k).p;
+% %% Find unmatched keypoints
+% 
+% % Retrieves the Descriptors and Keypoints without a Landmark-match
+% unMatchedIndices = ~ismember(currKeypoints', matchedCurrKeypoints','rows');
+% % [V;U]
+% currTriKeypoints = currKeypoints(:,unMatchedIndices);
+% currTriDescriptors = currDescriptors(:,unMatchedIndices);
+% 
+% 
+% %% START OF TRIANGULATION PART
+% disp(['Sizes of segments: ' size(dataBase)])
+% new_landmarks = [];
+% 
+% emptyColumns = find(cellfun(@isempty,dataBase(1,:)));
+% 
+% if(isempty(emptyColumns))
+%     dataBaseLength = 5;
+% else
+%     dataBaseLength = min(emptyColumns) - 1;
+% end
+% 
+% %First time running processFrame
+% if isempty(dataBase{1,1})
+%     dataBase{1,1} = currTriKeypoints; % 2xM keypoints
+%     dataBase{2,1} = currTriDescriptors; % NxM descriptors
+%     dataBase{3,1} = currPose(:); % 12x1 pose
+% else
+%     
+%     % Loop through data base but not last frame
+%     for i=1:dataBaseLength
+%         
+%         disp(['Frame being triangulated from segment ' num2str(i)]);
+% 
+%         %After first time
+%         prevTriKeypoints = dataBase{1,i};%%pull previous keypoints from tempstate [v;u]
+%         prevTriDescriptors = dataBase{2,i};%pull descriptor for each prev keypoint
+%         prevTriPose = dataBase{3,i};%pull all previous poses
+% 
+%         matches = matchDescriptors( currTriDescriptors, prevTriDescriptors, match_lambda);
+%         
+%         % [V;U]
+%         % For Triangulation
+%         matchesList = matches(matches > 0);
+%         matchedCurrTriKeypoints = currTriKeypoints(:, matches > 0);
+%         
+%         % [V;U]
+%         % ONLY Matched previous keypoints are kept:
+%         matchedPrevTriKeypoints = prevTriKeypoints(:, matchesList);
+% 
+%         % [V;U]
+%         % Unmatched current keypoints are saved for future triangulation
+%         unmatchedCurrTriKeypoints = currTriKeypoints(:, matches==0);
+%         unmatchedCurrTriDescriptors = currTriDescriptors(:, matches==0);
+% 
+%         % [U;V]
+%         % Setting up for triangulation 
+%         p1 = flipud(matchedPrevTriKeypoints);
+%         p2 = flipud(matchedCurrTriKeypoints);
+% 
+%         p1_hom = [p1; ones(1,size(p1,2))];
+%         p2_hom = [p2; ones(1,size(p2,2))];
+%         
+%         RANSAC = 1;
+%         
+%         if (RANSAC == 0)
+%             
+%             M1 =  K*reshape(prevTriPose,3,4);
+%             M2 = K*currPose;
+%         
+%             F_candidate = fundamentalEightPoint_normalized(p1_hom,p2_hom);
+%             
+%             normalized_p1 = K\p1_hom;%database
+%             normalized_p2 = K\p2_hom;%query
+% 
+%             pose_p2 = R_C_W*normalized_p2;
+% 
+%             bearing_angles = atan2(norm(cross(normalized_p1,pose_p2)), dot(normalized_p1,pose_p2));
+%             bearing_angles_deg = bearing_angles.*180./pi;    
+%             ang_thrsh = 40;
+%             
+%             d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
+%             inlierIndx = find(d<pixel_threshold);
+% %             inlierIndx = intersect(find(d < pixel_threshold),find(bearing_angles_deg>ang_thrsh));
+% 
+%             P = linearTriangulation(p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),M1,M2); %[U;V]
+%             triangulated_keypoints = p2(:,inlierIndx);
+%             
+%             
+% %             % Estimate the essential matrix E using the 8-point algorithm
+% %             E = estimateEssentialMatrix(p1_hom, p2_hom, K, K);
+% %             % Extract the relative camera positions (R,T) from the essential matrix
+% %             % Obtain extrinsic parameters (R,t) from E
+% %             [Rots,u3] = decomposeEssentialMatrix(E);
+% %             % Disambiguate among the four possible configurations
+% %             [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p1_hom,p2_hom,K,K);
+% %             % Triangulate a point cloud using the final transformation (R,T)
+% %             M1 = K*reshape(prevTriPose,3,4);
+% %             M2 = [[R_C2_W, T_C2_W];0,0,0,1]*[reshape(prevTriPose,3,4);0,0,0,1];
+% %             M2 = K*M2(1:3,1:4);
+% %             
+% %             normalized_p1 = K\p1_hom;%database
+% %             normalized_p2 = K\p2_hom;%query
+% % 
+% %             pose_p2 = R_C2_W*normalized_p2;
+% %             
+% %             F_candidate = fundamentalEightPoint_normalized(p1_hom,p2_hom);
+% %             
+% %             bearing_angles = atan2(norm(cross(normalized_p1,pose_p2)), dot(normalized_p1,pose_p2));
+% %             bearing_angles_deg = bearing_angles.*180./pi;    
+% %             ang_thrsh = 40;
+% %             
+% %             d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
+% % %             inlierIndx = intersect(find(d < pixel_threshold),find(bearing_angles_deg<ang_thrsh));
+% %             inlierIndx = find(d<pixel_threshold);
+% %             
+% %             P = linearTriangulation(p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),M1,M2); %[U;V]
+% %             triangulated_keypoints = p2(:,inlierIndx);
+%             
+%         else
+%             
+%             % Dummy initialization of RANSAC variables
+%             num_iterations = 2000; % chosen by me
+%             k = 10; % choose k random landmarks
+%             max_num_inliers_history = -1*ones(1,num_iterations);
+%             
+%             % Estimate the essential matrix E using the 8-point algorithm
+%             E = estimateEssentialMatrix(p1_hom, p2_hom, K, K);
+%             % Extract the relative camera positions (R,T) from the essential matrix
+%             % Obtain extrinsic parameters (R,t) from E
+%             [Rots,u3] = decomposeEssentialMatrix(E);
+%             % Disambiguate among the four possible configurations
+%             [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p1_hom,p2_hom,K,K);
+%             % Triangulate a point cloud using the final transformation (R,T)
+%             M1 = K*reshape(prevTriPose,3,4);
+%             M2 = [[R_C2_W, T_C2_W];0,0,0,1]*[reshape(prevTriPose,3,4);0,0,0,1];
+%             M2 = K*M2(1:3,1:4);
+%         
+%             
+%             P = linearTriangulation(p1_hom,p2_hom,M1,M2); %[U;V]
+%             
+%             for ii = 1:num_iterations
+% 
+%                 % choose random data from landmarks
+%                 [~, idx] = datasample(P(1:3,:),k,2,'Replace',false);
+%                 p1_sample = p1_hom(:,idx);
+%                 p2_sample = p2_hom(:,idx);
+%                 
+%                 if all(p1_sample(1,:) == p1_sample(1,1))
+%                     test = 0;
+%                 end
+% 
+%                 F_candidate = fundamentalEightPoint_normalized(p1_sample,p2_sample);
+%                 % E_candidate = estimateEssentialMatrix(p1_sample,p2_sample,K,K);
+% 
+%                 % calculate epipolar line distance
+% 
+%                 d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
+% 
+%                 % all relevant elements on diagonal
+%                 inlierind = find(d < pixel_threshold);
+%                 inliercount = length(inlierind);
+% 
+%                 if inliercount > max(max_num_inliers_history) && inliercount>=8
+%                     max_num_inliers_history(ii) = inliercount;
+%                     F_best = F_candidate;
+%                 elseif inliercount <= max(max_num_inliers_history)
+%                     % set to previous value
+%                     max_num_inliers_history(ii) = ...
+%                         max_num_inliers_history(ii-1);
+%                 end
+%             end
+% 
+%             d = (epipolarLineDistance(F_best,p1_hom,p2_hom));
+%             inlierIndx = find(d < pixel_threshold);
+%             
+%             % Estimate the essential matrix E using the 8-point algorithm
+%             E = estimateEssentialMatrix(p1_hom(:,inlierIndx), p2_hom(:,inlierIndx), K, K);
+%             % Extract the relative camera positions (R,T) from the essential matrix
+%             % Obtain extrinsic parameters (R,t) from E
+%             [Rots,u3] = decomposeEssentialMatrix(E);
+%             % Disambiguate among the four possible configurations
+%             [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),K,K);
+%             % Triangulate a point cloud using the final transformation (R,T)
+%             M1 = K*reshape(prevTriPose,3,4);
+%             M2 = [[R_C2_W, T_C2_W];0,0,0,1]*[reshape(prevTriPose,3,4);0,0,0,1];
+%             M2 = K*M2(1:3,1:4);
+%             
+%             P = linearTriangulation(p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),M1,M2); %[U;V]
+%             triangulated_keypoints = p2(:,inlierIndx);
+%             
+%         end
+% 
+%         
+% 
+%         showMatchedFeatures(prevImage, currImage, p1(:,inlierIndx)',p2(:,inlierIndx)')
+%         disp([num2str(size(P,2)) ' New Triangulated points'])
+%         %filter new points:
+%         world_pose =-R_C_W'*t_C_W;
+%         max_dif = [ 30; 2 ; 80];
+%         min_dif = [-30; -8; 5];
+%         PosZmax = P(3,:) > world_pose(3)+min_dif(3);
+%         PosYmax = P(2,:) > world_pose(2)+min_dif(2);
+%         PosXmax = P(1,:) > world_pose(1)+min_dif(1);
+%         PosZmin = P(3,:) < world_pose(3)+max_dif(3);
+%         PosYmin = P(2,:) < world_pose(2)+max_dif(2);
+%         PosXmin = P(1,:) < world_pose(1)+max_dif(1);
+%         Pos_count = PosZmax +PosYmax+PosXmax+PosZmin+PosYmin+PosXmin;
+%         Pok = Pos_count==6;
+%         P = P(:,Pok);
+%         triangulated_keypoints = triangulated_keypoints(:,Pok);
+%         
+%         
+%        
+%         %[V;U]
+%         new_landmarks = [new_landmarks,...
+%             [flipud(triangulated_keypoints);P(1:3,:)]];
+%     end
+%     
+% 
+% 
+% % Add new Landmarks
+% currState = [currState,new_landmarks];
+% 
+% % Clean up and add to data base
+% if(isempty(emptyColumns))
+%     dataBase(:,1) = []; % delete oldest frame
+%     dataBase{1,5} = unmatchedCurrTriKeypoints; %2xM keypoints
+%     dataBase{2,5} = unmatchedCurrTriDescriptors; %NxM descriptors
+%     dataBase{3,5} = currPose(:); %12x1 pose
+% else
+%     dataBase{1,min(emptyColumns)} = unmatchedCurrTriKeypoints; %2xM keypoints
+%     dataBase{2,min(emptyColumns)} = unmatchedCurrTriDescriptors; %NxM descriptors
+%     dataBase{3,min(emptyColumns)} = currPose(:); %12x1 pose
+% end
+%     
+% end
 
-% Choose one of the two next lines:
-% If we want to plot the translation part only, uncomment:
-%M = [ 1 0 p(5); 0 1 p(6); 0 0 1];
-% If we want to plot the full affine transformation, uncomment:
-M = [ 1+p(1) p(3) p(5); p(2) 1+p(4) p(6); 0 0 1];
-
-v = [halfh, -halfh, -halfh,  halfh; % x-axis is vertical, downward
-     halfw,  halfw, -halfw, -halfw; % y-axis is horizontal, to the right
-     ones(1,4)];
-
-v = M*v; % Apply transformation
-
-% Plot vertices of (warped) template
-plot_quadrilateral(v([2,1],:), color(k,:));
 
 end
