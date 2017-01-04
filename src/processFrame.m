@@ -11,11 +11,18 @@ global num_keypoints;
 global nonmaximum_supression_radius;
 global descriptor_radius;
 global match_lambda;
-global pixel_threshold;
+global triangulationTolerance;
+global p3pIterations;
+global p3pTolerance;
+global p3pSample;
+global triangulationIterations;
+global triangulationSample;
+global triangulationRansac;
 
-num_iterations = 2000;
-pixel_tolerance = 3;
-k = 3;
+global max_dif;
+global min_dif;
+
+global dataBaseSize;
 
 
 %% Process prevImage
@@ -44,16 +51,15 @@ matches = matchDescriptors( currDescriptors, prevDescriptors, match_lambda);
 matchedCurrKeypoints = currKeypoints(:, matches > 0);
 matchedLandmarks = prevLandmarks(:, matches(matches > 0));
 
-%% RANSAC
+%% P3P RANSAC
 
-% Initialize RANSAC.
 % [U;V]
 matchedCurrKeypoints = flipud(matchedCurrKeypoints); 
-max_num_inliers_history = zeros(1, num_iterations);
+max_num_inliers_history = zeros(1, p3pIterations);
 max_num_inliers = 0;
 
-for i = 1:num_iterations
-    [landmark_sample, idx] = datasample(matchedLandmarks, k, 2, 'Replace', false);
+for i = 1:p3pIterations
+    [landmark_sample, idx] = datasample(matchedLandmarks, p3pSample, 2, 'Replace', false);
     keypoint_sample = matchedCurrKeypoints(:, idx);
 
 
@@ -80,7 +86,7 @@ for i = 1:num_iterations
         [1 size(matchedLandmarks, 2)]), K);
     difference = matchedCurrKeypoints - projected_points;
     errors = sum(difference.^2, 1);
-    inliers = errors < pixel_tolerance^2;
+    inliers = errors < p3pTolerance^2;
     guess = 1;
     
     % Count inliers for guess 2
@@ -89,7 +95,7 @@ for i = 1:num_iterations
         [1 size(matchedLandmarks, 2)]), K);
     difference = matchedCurrKeypoints - projected_points;
     errors = sum(difference.^2, 1);
-    inliers_guess_2 = errors < pixel_tolerance^2;
+    inliers_guess_2 = errors < p3pTolerance^2;
     
     if nnz(inliers_guess_2) > nnz(inliers)
         inliers = inliers_guess_2;
@@ -136,19 +142,19 @@ currTriDescriptors = currDescriptors(:,unMatchedIndices);
 
 
 %% START OF TRIANGULATION PART
-disp(['Sizes of segments: ' size(dataBase)])
 new_landmarks = [];
 
 emptyColumns = find(cellfun(@isempty,dataBase(1,:)));
 
 if(isempty(emptyColumns))
-    dataBaseLength = 3;
+    dataBaseLength = dataBaseSize;
 else
     dataBaseLength = min(emptyColumns) - 1;
 end
 
 %First time running processFrame
 if isempty(dataBase{1,1})
+    disp('Can''t triangulate new points this frame.')
     dataBase{1,1} = currTriKeypoints; % 2xM keypoints
     dataBase{2,1} = currTriDescriptors; % NxM descriptors
     dataBase{3,1} = currPose(:); % 12x1 pose
@@ -188,68 +194,32 @@ else
         p1_hom = [p1; ones(1,size(p1,2))];
         p2_hom = [p2; ones(1,size(p2,2))];
         
-        RANSAC = 1;
-        
-        if (RANSAC == 0)
+        if (~triangulationRansac)
             
-            M1 =  K*reshape(prevTriPose,3,4);
-            M2 = K*currPose;
-        
             F_candidate = fundamentalEightPoint_normalized(p1_hom,p2_hom);
             
-            normalized_p1 = K\p1_hom;%database
-            normalized_p2 = K\p2_hom;%query
-
-            pose_p2 = R_C_W*normalized_p2;
-
-            bearing_angles = atan2(norm(cross(normalized_p1,pose_p2)), dot(normalized_p1,pose_p2));
-            bearing_angles_deg = bearing_angles.*180./pi;    
-            ang_thrsh = 40;
-            
             d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
-            inlierIndx = find(d<pixel_threshold);
-%             inlierIndx = intersect(find(d < pixel_threshold),find(bearing_angles_deg>ang_thrsh));
-
+            inlierIndx = find(d<triangulationTolerance);
+            
+            % Estimate the essential matrix E using the 8-point algorithm
+            E = estimateEssentialMatrix(p1_hom, p2_hom, K, K);
+            % Extract the relative camera positions (R,T) from the essential matrix
+            % Obtain extrinsic parameters (R,t) from E
+            [Rots,u3] = decomposeEssentialMatrix(E);
+            % Disambiguate among the four possible configurations
+            [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p1_hom,p2_hom,K,K);
+            % Triangulate a point cloud using the final transformation (R,T)
+            M1 = K*reshape(prevTriPose,3,4);
+            M2 = [[R_C2_W, T_C2_W];0,0,0,1]*[reshape(prevTriPose,3,4);0,0,0,1];
+            M2 = K*M2(1:3,1:4);
+        
             P = linearTriangulation(p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),M1,M2); %[U;V]
             triangulated_keypoints = p2(:,inlierIndx);
-            
-            
-%             % Estimate the essential matrix E using the 8-point algorithm
-%             E = estimateEssentialMatrix(p1_hom, p2_hom, K, K);
-%             % Extract the relative camera positions (R,T) from the essential matrix
-%             % Obtain extrinsic parameters (R,t) from E
-%             [Rots,u3] = decomposeEssentialMatrix(E);
-%             % Disambiguate among the four possible configurations
-%             [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p1_hom,p2_hom,K,K);
-%             % Triangulate a point cloud using the final transformation (R,T)
-%             M1 = K*reshape(prevTriPose,3,4);
-%             M2 = [[R_C2_W, T_C2_W];0,0,0,1]*[reshape(prevTriPose,3,4);0,0,0,1];
-%             M2 = K*M2(1:3,1:4);
-%             
-%             normalized_p1 = K\p1_hom;%database
-%             normalized_p2 = K\p2_hom;%query
-% 
-%             pose_p2 = R_C2_W*normalized_p2;
-%             
-%             F_candidate = fundamentalEightPoint_normalized(p1_hom,p2_hom);
-%             
-%             bearing_angles = atan2(norm(cross(normalized_p1,pose_p2)), dot(normalized_p1,pose_p2));
-%             bearing_angles_deg = bearing_angles.*180./pi;    
-%             ang_thrsh = 40;
-%             
-%             d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
-% %             inlierIndx = intersect(find(d < pixel_threshold),find(bearing_angles_deg<ang_thrsh));
-%             inlierIndx = find(d<pixel_threshold);
-%             
-%             P = linearTriangulation(p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),M1,M2); %[U;V]
-%             triangulated_keypoints = p2(:,inlierIndx);
             
         else
             
             % Dummy initialization of RANSAC variables
-            num_iterations = 2000; % chosen by me
-            k = 10; % choose k random landmarks
-            max_num_inliers_history = -1*ones(1,num_iterations);
+            max_num_inliers_history = -1*ones(1,triangulationIterations);
             
             % Estimate the essential matrix E using the 8-point algorithm
             E = estimateEssentialMatrix(p1_hom, p2_hom, K, K);
@@ -266,26 +236,21 @@ else
             
             P = linearTriangulation(p1_hom,p2_hom,M1,M2); %[U;V]
             
-            for ii = 1:num_iterations
+            for ii = 1:triangulationIterations
 
                 % choose random data from landmarks
-                [~, idx] = datasample(P(1:3,:),k,2,'Replace',false);
+                [~, idx] = datasample(P(1:3,:),triangulationSample,2,'Replace',false);
                 p1_sample = p1_hom(:,idx);
                 p2_sample = p2_hom(:,idx);
-                
-                if all(p1_sample(1,:) == p1_sample(1,1))
-                    test = 0;
-                end
 
                 F_candidate = fundamentalEightPoint_normalized(p1_sample,p2_sample);
-                % E_candidate = estimateEssentialMatrix(p1_sample,p2_sample,K,K);
 
                 % calculate epipolar line distance
 
                 d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
 
                 % all relevant elements on diagonal
-                inlierind = find(d < pixel_threshold);
+                inlierind = find(d < triangulationTolerance);
                 inliercount = length(inlierind);
 
                 if inliercount > max(max_num_inliers_history) && inliercount>=8
@@ -299,7 +264,7 @@ else
             end
 
             d = (epipolarLineDistance(F_best,p1_hom,p2_hom));
-            inlierIndx = find(d < pixel_threshold);
+            inlierIndx = find(d < triangulationTolerance);
             
             % Estimate the essential matrix E using the 8-point algorithm
             E = estimateEssentialMatrix(p1_hom(:,inlierIndx), p2_hom(:,inlierIndx), K, K);
@@ -324,8 +289,6 @@ else
         disp([num2str(size(P,2)) ' New Triangulated points'])
         %filter new points:
          world_pose =-R_C_W'*t_C_W;
-        max_dif = [ 0.5; 0.5; 0.5];
-        min_dif = [-0.5; -0.5; -0.5];
         inFront = R_C_W(3,1:3)*(P(1:3,:)-world_pose) > 0;
         
         PosZmax = P(3,:) < world_pose(3)+min_dif(3);
@@ -357,9 +320,9 @@ currState = [currState,new_landmarks];
 % Clean up and add to data base
 if(isempty(emptyColumns))
     dataBase(:,1) = []; % delete oldest frame
-    dataBase{1,3} = unmatchedCurrTriKeypoints; %2xM keypoints
-    dataBase{2,3} = unmatchedCurrTriDescriptors; %NxM descriptors
-    dataBase{3,3} = currPose(:); %12x1 pose
+    dataBase{1,dataBaseSize} = unmatchedCurrTriKeypoints; %2xM keypoints
+    dataBase{2,dataBaseSize} = unmatchedCurrTriDescriptors; %NxM descriptors
+    dataBase{3,dataBaseSize} = currPose(:); %12x1 pose
 else
     dataBase{1,min(emptyColumns)} = unmatchedCurrTriKeypoints; %2xM keypoints
     dataBase{2,min(emptyColumns)} = unmatchedCurrTriDescriptors; %NxM descriptors

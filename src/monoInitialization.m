@@ -12,7 +12,11 @@ global nonmaximum_supression_radius;
 global descriptor_radius;
 global match_lambda;
 global num_keypoints;
+global triangulationTolerance;
 
+global initializationIterations;
+
+disp('Initializing')
 
 %% establish keypoint correspondences between these two frames
 
@@ -59,7 +63,8 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
 
         % Triangulate a point cloud using the final transformation (R,T)
         M0 = K *initialPose; % transformation from frame 0 to frame 0
-        M1 = K * [R_C1_W, T_C1_W]; % transformation from frame 0 to frame 1
+        M1 = [[R_C1_W, T_C1_W];0,0,0,1]*[initialPose;0,0,0,1];
+        M1 = K*M1(1:3,1:4);
         % homogeneous representation of 3D coordinates
         P = linearTriangulation(p0,p1,M0,M1);
         % scatter3(P(1,:),P(2,:),P(3,:))
@@ -76,10 +81,7 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
         zlabel('Z');
 
     elseif ransac == 1
-
-        % Dummy initialization of RANSAC variables
-        num_iterations = 2000; % chosen by me
-        pixel_threshold = 1; % specified in pipeline
+        
         k = 10; % choose k random landmarks
 
         % RANSAC implementation
@@ -88,10 +90,6 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
         % F --> a point correspondence should be considered an inlier if
         % the epipolar line distance is less than a threshold. (here 1
         % pixel)
-
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-        % get first essential/fundamental matrix and calculate landmarks
 
         % Estimate the essential matrix E using the 8-point algorithm
         E = estimateEssentialMatrix(p0, p1, K, K);
@@ -105,16 +103,13 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
 
         % Triangulate a point cloud using the final transformation (R,T)
         M0 = K * initialPose;
-        M1 = K * [R_C2_W, T_C2_W];
+        M1 = [[R_C2_W, T_C2_W];0,0,0,1]*[initialPose;0,0,0,1];
+        M1 = K*M1(1:3,1:4);
         P = linearTriangulation(p0,p1,M0,M1);
 
-        num_inliers_history = zeros(1,num_iterations);
-        max_num_inliers_history = zeros(1,num_iterations);
+        max_num_inliers_history = zeros(1,initializationIterations);
 
-        % to fit all candidate points in matrix
-        best_guess_history = zeros(3,k*num_iterations,2);
-
-        for ii = 1:num_iterations
+        for ii = 1:initializationIterations
 
             % choose random data from landmarks
             [~, idx] = datasample(P(1:3,:),k,2,'Replace',false);
@@ -132,7 +127,7 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
             d = (epipolarLineDistance(F_candidate,p0,p1));
 
             % all relevant elements on diagonal
-            inlierind = find(d < pixel_threshold);
+            inlierind = find(d < triangulationTolerance);
             inliercount = length(inlierind);
 
             if inliercount > max(max_num_inliers_history) && inliercount>=8
@@ -147,7 +142,7 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
         %% COMPUTE NEW MODEL FROM BEST
         d = (epipolarLineDistance(F_best,p0,p1));
         % all relevant elements on diagonal
-        inlierind = find(d < pixel_threshold);
+        inlierind = find(d < triangulationTolerance);
         p0 = p0(:,inlierind);
         p1 = p1(:,inlierind);
         % Estimate the essential matrix E using the 8-point algorithm
@@ -159,12 +154,33 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
         [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p0,p1,K,K);
         % Triangulate a point cloud using the final transformation (R,T)
         M0 = K * initialPose;
-        M1 = K * [R_C2_W, T_C2_W];
+        M1 = [[R_C2_W, T_C2_W];0,0,0,1]*[initialPose;0,0,0,1];
+        M1 = K*M1(1:3,1:4);
         firstLandmarks = linearTriangulation(p0,p1,M0,M1);
         
-        firstKeypoints = flipud(p1(1:2,:));
+        
+        %filter new points:
+        R_C_W = initialPose(1:3,1:3);
+        t_C_W = initialPose(1:3,4);
+        world_pose =-R_C_W'*t_C_W;
+        max_dif = [ 0; 0; 0];
+        min_dif = [0; 0; 0];
+        inFront = R_C_W(3,1:3)*(firstLandmarks(1:3,:)-world_pose) > 0;
+        
+        PosZmax = firstLandmarks(3,:) < world_pose(3)+min_dif(3);
+        PosYmax = firstLandmarks(2,:) < world_pose(2)+min_dif(2);
+        PosXmax = firstLandmarks(1,:) < world_pose(1)+min_dif(1);
+        
+        PosZmin = firstLandmarks(3,:) > world_pose(3)+max_dif(3);
+        PosYmin = firstLandmarks(2,:) > world_pose(2)+max_dif(2);
+        PosXmin = firstLandmarks(1,:) > world_pose(1)+max_dif(1);
+        Pos_count = PosZmax+PosYmax+PosXmax+PosZmin+PosYmin+PosXmin+inFront;
+        Pok = Pos_count==4;
+        firstLandmarks = firstLandmarks(:,Pok);
 
-        %prevState = [flipud(p1(1:2,:));firstLandmarks];
+        disp([num2str(size(firstLandmarks,2)) ' Tiangulated points within bounds']) 
+        
+        firstKeypoints = flipud(p1(1:2,Pok));
 
     end
 end

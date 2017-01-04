@@ -8,8 +8,9 @@ close all;
 clc;
 %% initialize variables
 format shortG
-dataset = 0; % 0: KITTI, 1: Malaga, 2: parking
-
+warning off
+dataset = 1; % 0: KITTI, 1: Malaga, 2: parking
+tic
 rng(1);
 
 % Tuning Parameters
@@ -20,27 +21,14 @@ global num_keypoints;
 global nonmaximum_supression_radius;
 global descriptor_radius;
 global match_lambda;
-global use_p3p;
-global pose_dist_threshold;
-global num_KLT_patches;
-global random_KLT_patches;
-global pixel_threshold;
+global triangulationTolerance;
+global p3pIterations;
+global p3pTolerance;
+global p3pSample;
+global triangulationIterations;
+global initializationIterations;
 
-% Pose Estimation
-use_p3p = true;
-
-% Harris Corner Detector Parameters
-% Randomly chosen parameters that seem to work well
-harris_patch_size = 9;
-harris_kappa = 0.08; % Magic number in range (0.04 to 0.15)
-num_keypoints = 2000;
-nonmaximum_supression_radius = 6;
-descriptor_radius = 9;
-match_lambda = 5;
-pose_dist_threshold = 0.10; % 10% used by Google Tango
-num_KLT_patches = 50; %number evenly spaced KLT patches
-random_KLT_patches = false;
-pixel_threshold = 1;
+global dataBaseSize;
 
 
 %% set up relevant paths
@@ -55,7 +43,7 @@ addpath(genpath('src'))
 addpath(genpath('testdata')) % here not necessary
 
 if dataset == 0
-    
+    run kittiParameters
     assert(exist(kitti_path) ~= 0);
     ground_truth = load([kitti_path '/poses/00.txt']);
     ground_truth = ground_truth(:, [end-8 end]);
@@ -66,6 +54,7 @@ if dataset == 0
     groundTruth = load('kitti/poses/00.txt');
     
 elseif dataset == 1
+    run malagaParameters
     % Path containing the many files of Malaga 7.
     assert(exist(malaga_path) ~= 0);
     images = dir([malaga_path ...
@@ -76,11 +65,9 @@ elseif dataset == 1
         0 621.18428 309.05989
         0 0 1];
 elseif dataset == 2
-    % Path containing images, depths and all...
-    %assert(exist(parking_path) ~= 0);
+    run parkingParameters
     last_frame = 598;
     K = load([parking_path '/K.txt']);
-     
     ground_truth = load([parking_path '/poses.txt']);
     ground_truth = ground_truth(:, [end-8 end]);
 else
@@ -90,7 +77,7 @@ end
 %% bootstrap / initialization of keypoint matching between adjacent frames
 
 bootstrap_frames = [1 3]; % first and third frame
-% bootstrap_frames = [95 97];
+% bootstrap_frames = [170 173];
 
 if dataset == 0
     img0 = imread([kitti_path '/00/image_0/' ...
@@ -117,14 +104,13 @@ end
 ransac = 1;
 
  fprintf('\n\nProcessing frame %d\n=====================\n', bootstrap_frames(1));
-[firstKeypoints,firstLandmarks] = monocular_intialization(img0,img1,ransac,K,eye(3,4));
+[firstKeypoints,firstLandmarks] = monoInitialization(img0,img1,ransac,K,eye(3,4));
 prevImage = img1;
 prevState = [firstKeypoints;firstLandmarks(1:3,:)];
 
 figure
 set(gcf,'Position',[-1854 1 1855 1001])
 subplot(1, 3, 3); %uncomment to display images
-scatter3(firstLandmarks(1, :), firstLandmarks(2, :), firstLandmarks(3, :), 3,'b');
 set(gcf, 'GraphicsSmoothing', 'on');
 view(0,0);
 axis equal;
@@ -134,8 +120,8 @@ axis([-15 15 -20 5 -20 30]);
 
 %% Continuous operation
 range = 1:last_frame;
-dataBase = cell(3,3);
-for i = 1:last_frame
+dataBase = cell(3,dataBaseSize);
+for i = 2:last_frame
     fprintf('\n\nProcessing frame %d\n=====================\n', i);
     if dataset == 0
         currImage = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
@@ -153,17 +139,38 @@ for i = 1:last_frame
         assert(false);
     end
     
-    %check to see if we're lose and if so, re initialize
+    %check to see if we're close and if so, re initialize
     if(isempty(currState))
-        twoImagesAge = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i-2)]);
-        currPose = reshape(dataBase{3,2},3,4);%two poses ago
-        [firstKeypoints,firstLandmarks] = monocular_intialization(twoImagesAge,currImage,ransac,K,currPose);
+        disp('Lost, will have to reinitialize from last pose')
+        if dataset == 0
+            twoImagesAgo = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i-2)]);
+        elseif dataset == 1
+            twoImagesAgo = rgb2gray(imread([malaga_path ...
+                '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
+                left_images(i-2).name]));
+        elseif dataset == 2
+            twoImagesAgo = im2uint8(rgb2gray(imread([parking_path ...
+                sprintf('/images/img_%05d.png',i-2)])));
+        else
+            assert(false);
+        end
+        emptyColumns = find(cellfun(@isempty,dataBase(1,:)));
+        
+        if(isempty(emptyColumns))
+            idx = dataBaseSize-1;
+        else
+            idx = min(emptyColumns) - 1;
+        end
+        
+        currPose = reshape(dataBase{3,idx},3,4);%two poses ago
+        [firstKeypoints,firstLandmarks] = monoInitialization(twoImagesAgo,currImage,ransac,K,currPose);
         currState = [firstKeypoints;firstLandmarks(1:3,:)];
         prevState = ones(5,size(currState,2));
+        dataBase = cell(3,dataBaseSize);
     end
     
-    R_C_W = currPose(:,1:3)
-    t_C_W = currPose(:,4)
+    R_C_W = currPose(:,1:3);
+    t_C_W = currPose(:,4);
 
     % Distinguish success from failure.
     if (numel(R_C_W) > 0)
@@ -186,7 +193,7 @@ for i = 1:last_frame
         pos = -R_C_W'*t_C_W;
         idx = ~ismember(currState(3:5,:)',prevState(3:5,:)','rows');
         test = currState(3:5,idx);
-        currentLandmarks = scatter3(test(1, :), test(2, :), test(3, :), 5,'r','filled');
+        currentLandmarks = scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
         axis([pos(1)-25 pos(1)+25 pos(2)-20 pos(2)+5 pos(3)-10 pos(3)+30]);
         view(0,0);
         hold off
@@ -204,3 +211,5 @@ for i = 1:last_frame
     pause(0.01);
     
 end
+
+toc
