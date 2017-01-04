@@ -16,6 +16,10 @@ function F = fundamentalEightPoint_normalized(p1, p2)
 [x1_nh,T1] = normalise2dpts(p1);
 [x2_nh,T2] = normalise2dpts(p2);
 
+if(isnan(sum(sum(x1_nh))) || isnan(sum(sum(x2_nh))))
+    test = 0;
+end
+
 % Linear solution
 F = fundamentalEightPoint(x1_nh,x2_nh);
 

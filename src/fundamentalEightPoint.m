@@ -34,7 +34,11 @@ end
 % "Solve" the linear homogeneous system of equations A*f = 0.
 % The correspondences x1,x2 are exact <=> rank(A)=8 -> there exist an exact solution
 % If measurements are noisy, then rank(A)=9 => there is no exact solution, seek a least-squares solution.
-[~,~,V] = svd(A,0);
+try
+    [~,~,V] = svd(A,0);
+catch
+    test = 0;
+end
 F = reshape(V(:,9),3,3);
 
 % Enforce det(F)=0 by projecting F onto the set of 3x3 singular matrices
