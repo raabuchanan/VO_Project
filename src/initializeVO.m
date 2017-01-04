@@ -178,7 +178,7 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
         Pok = Pos_count==4;
         firstLandmarks = firstLandmarks(:,Pok);
 
-        disp([num2str(size(firstLandmarks,2)) ' Tiangulated points within bounds']) 
+        disp([num2str(size(firstLandmarks,2)) ' triangulated points within bounds']) 
         
         firstKeypoints = flipud(p1(1:2,Pok));
 

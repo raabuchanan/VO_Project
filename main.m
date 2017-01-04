@@ -77,14 +77,14 @@ elseif dataset == 3
     run tramParameters
     last_frame = 715;
     load([tram_path '/calibration/cameraParams.mat']);
-    K = cameraParams.IntrinsicMatrix;
+    K = (cameraParams.IntrinsicMatrix)';
 else
     assert(false);
 end
 
 %% bootstrap / initialization of keypoint matching between adjacent frames
 
-bootstrap_frames = [11 14]; % first and third frame
+bootstrap_frames = [99 101]; % first and third frame
 % bootstrap_frames = [170 173];
 
 if dataset == 0
@@ -106,7 +106,7 @@ elseif dataset == 2
         sprintf('/images/img_%05d.png',bootstrap_frames(2))]));
 elseif dataset == 3
     img0 = rgb2gray(imread([tram_path ...
-        sprintf('/images/scene%05d.jpg',bootstrap_frames(1))]));
+        sprintf('/images/scene%05d.jpg',5*(bootstrap_frames(1)-1)+1)]));
     img1 = rgb2gray(imread([tram_path ...
         sprintf('/images/scene%05d.jpg',5*(bootstrap_frames(2)-1)+1)]));
 else
@@ -135,7 +135,7 @@ axis([-15 15 -20 5 -20 30]);
 %% Continuous operation
 range = 1:last_frame;
 dataBase = cell(3,dataBaseSize);
-for i = 20:last_frame
+for i = 100:last_frame
     fprintf('\n\nProcessing frame %d\n=====================\n', i);
     if dataset == 0
         currImage = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
@@ -183,7 +183,7 @@ for i = 20:last_frame
         end
         
         currPose = reshape(dataBase{3,idx},3,4);%two poses ago
-        [firstKeypoints,firstLandmarks] = monoInitialization(twoImagesAgo,currImage,ransac,K,currPose);
+        [firstKeypoints,firstLandmarks] = initializeVO(twoImagesAgo,currImage,ransac,K,currPose);
         currState = [firstKeypoints;firstLandmarks(1:3,:)];
         prevState = ones(5,size(currState,2));
         dataBase = cell(3,dataBaseSize);
@@ -194,9 +194,11 @@ for i = 20:last_frame
 
     % Distinguish success from failure.
     if (numel(R_C_W) > 0)
-        
+               
         subplot(1, 3, 3);
-        plotCoordinateFrame(R_C_W', -R_C_W'*t_C_W, 2,['k';'k';'k']);
+        % plotCoordinateFrame(R_C_W', -R_C_W'*t_C_W, 2,['k';'k';'k']);
+        origin = -R_C_W'*t_C_W;
+        scatter3(origin(1),origin(2),origin(3),'k','filled','s');
         hold on
 %         if (dataset==0)
 %             % Plot ground truth based on Dataset
@@ -210,16 +212,21 @@ for i = 20:last_frame
         if(exist('currentLandmarks'))
             delete(currentLandmarks)
         end
+        
         pos = -R_C_W'*t_C_W;
         idx = ~ismember(currState(3:5,:)',prevState(3:5,:)','rows');
         test = currState(3:5,idx);
         currentLandmarks = scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
         axis([pos(1)-25 pos(1)+25 pos(2)-20 pos(2)+5 pos(3)-10 pos(3)+30]);
         view(0,0);
-        hold off
+        hold on
         
         subplot(1, 3, [1 2]);
         imshow(currImage);
+        
+        
+       
+        
     else
         disp(['Frame ' num2str(i) ' failed to localize!']);
     end
@@ -228,6 +235,7 @@ for i = 20:last_frame
     prevImage = currImage;
     
     % Makes sure that plots refresh.    
+    drawnow
     pause(0.01);
     
 end
