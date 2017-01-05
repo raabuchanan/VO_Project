@@ -1,4 +1,4 @@
-function [firstKeypoints,firstLandmarks] = monoInitialization(img0,img1,ransac,K,initialPose)
+function [firstKeypoints,firstLandmarks] = autoMonoInitialization(dataset,ransac,K,initialPose)
 %function [firstState,firstLandmarks] = monocular_initialization(img0,img1,ransac,dataset)
 
 % indicate first two images for bootstrapping
@@ -18,33 +18,98 @@ global initializationIterations;
 
 disp('Initializing')
 
-%% establish keypoint correspondences between these two frames
+    kitti_path = 'kitti';
+    malaga_path = 'malaga-urban-dataset-extract-07/';
+    parking_path = 'parking';
+    tram_path = 'tram';
 
+    if dataset == 0
+        img0 = imread([kitti_path '/00/image_0/' ...
+            sprintf('%06d.png',1)]);
+    elseif dataset == 1
+        img0 = rgb2gray(imread([malaga_path ...
+            '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
+            left_images(1).name]));
+    elseif dataset == 2
+        img0 = rgb2gray(imread([parking_path ...
+            sprintf('/images/img_%05d.png',1)]));
+    elseif dataset == 3
+        img0 = rgb2gray(imread([tram_path ...
+            sprintf('/images/scene%05d.jpg',1)]));
+    else
+        assert(false);
+    end
+    
 % Find Harris scores / keypoints / descriptors of images
 harris0 = harris(img0, harris_patch_size, harris_kappa);
 assert(min(size(harris0) == size(img0)));
 keypoints0 = selectKeypoints(harris0, num_keypoints, nonmaximum_supression_radius);
 descriptors0 = describeKeypoints(img0, keypoints0, descriptor_radius);
+    
+max_inliers = 0;
 
-harris1 = harris(img1, harris_patch_size, harris_kappa);
-assert(min(size(harris1) == size(img1)));
-keypoints1 = selectKeypoints(harris1, num_keypoints, nonmaximum_supression_radius);
-descriptors1 = describeKeypoints(img1, keypoints1, descriptor_radius);
+for i=2:7
+
+    if dataset == 0
+        img1 = imread([kitti_path '/00/image_0/' ...
+            sprintf('%06d.png',i)]);
+    elseif dataset == 1
+        img1 = rgb2gray(imread([malaga_path ...
+            '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
+            left_images(i).name]));
+    elseif dataset == 2
+        img1 = rgb2gray(imread([parking_path ...
+            sprintf('/images/img_%05d.png',i)]));
+    elseif dataset == 3
+        img1 = rgb2gray(imread([tram_path ...
+            sprintf('/images/scene%05d.jpg',5*(i-1)+1)]));
+    else
+        assert(false);
+    end
 
 
-% find all matches between the frames
-all_matches = matchDescriptors(descriptors1, descriptors0, match_lambda);
-keypoint_matches1 = flipud(keypoints1(:, all_matches > 0));
+%% establish keypoint correspondences between these two frames
 
-matchesList = all_matches(all_matches > 0);
-keypoint_matches0 = flipud(keypoints0(:, matchesList));
+    harris1 = harris(img1, harris_patch_size, harris_kappa);
+    assert(min(size(harris1) == size(img1)));
+    keypoints1 = selectKeypoints(harris1, num_keypoints, nonmaximum_supression_radius);
+    descriptors1 = describeKeypoints(img1, keypoints1, descriptor_radius);
 
-% for later: detectFASTfeatures
-% only find those indices that are non-zero, i.e. that fulfill the
-% condition (dists < lambda * min_non_zero_dist)
 
-p0 = [keypoint_matches0; ones(1,size(keypoint_matches0,2))];
-p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
+    % find all matches between the frames
+    all_matches = matchDescriptors(descriptors1, descriptors0, match_lambda);
+    keypoint_matches1 = flipud(keypoints1(:, all_matches > 0));
+
+    matchesList = all_matches(all_matches > 0);
+    keypoint_matches0 = flipud(keypoints0(:, matchesList));
+
+    p0 = [keypoint_matches0; ones(1,size(keypoint_matches0,2))];
+    p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
+   
+    if(size(p0,2)>=8)
+        F_candidate = fundamentalEightPoint_normalized(p0,p1);
+        d = (epipolarLineDistance(F_candidate,p0,p1));
+    else
+        d = ones(1,size(p0,2));
+    end    
+
+    % all relevant elements on diagonal
+    inlierind = find(d < triangulationTolerance);
+    inliercount = length(inlierind);
+    
+    if inliercount>=max_inliers
+        max_inliers = inliercount;
+        best_p0 = p0;
+        best_p1 = p1;
+        best_frame = i;
+    end
+    
+    
+end
+
+        disp(['Initializing with frame ' num2str(best_frame)])
+        p0 = best_p0;
+        p1 = best_p1;
 
 %% RANSAC
 
@@ -67,18 +132,6 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
         M1 = K*M1(1:3,1:4);
         % homogeneous representation of 3D coordinates
         P = linearTriangulation(p0,p1,M0,M1);
-        % scatter3(P(1,:),P(2,:),P(3,:))
-
-        figure(5)
-        scatter3(P(1,:),P(2,:),P(3,:), 20,'filled');
-        hold on
-        plot3(T_C1_W(1),T_C1_W(2),T_C1_W(3),'rx');
-        axis equal;
-        axis vis3d;
-        grid off;
-        xlabel('X');
-        ylabel('Y');
-        zlabel('Z');
 
     elseif ransac == 1
         

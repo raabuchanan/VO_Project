@@ -190,132 +190,129 @@ else
         % Setting up for triangulation 
         p1 = flipud(matchedPrevTriKeypoints);
         p2 = flipud(matchedCurrTriKeypoints);
-
-        p1_hom = [p1; ones(1,size(p1,2))];
-        p2_hom = [p2; ones(1,size(p2,2))];
         
-        if (~triangulationRansac)
+        if size(p1,2)>=8
             
-            F_candidate = fundamentalEightPoint_normalized(p1_hom,p2_hom);
-            
-            d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
-            inlierIndx = find(d<triangulationTolerance);
-            
-            % Estimate the essential matrix E using the 8-point algorithm
-            E = estimateEssentialMatrix(p1_hom, p2_hom, K, K);
-            % Extract the relative camera positions (R,T) from the essential matrix
-            % Obtain extrinsic parameters (R,t) from E
-            [Rots,u3] = decomposeEssentialMatrix(E);
-            % Disambiguate among the four possible configurations
-            [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p1_hom,p2_hom,K,K);
-            % Triangulate a point cloud using the final transformation (R,T)
-            M1 = K*reshape(prevTriPose,3,4);
-            M2 = [[R_C2_W, T_C2_W];0,0,0,1]*[reshape(prevTriPose,3,4);0,0,0,1];
-            M2 = K*M2(1:3,1:4);
-        
-            P = linearTriangulation(p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),M1,M2); %[U;V]
-            triangulated_keypoints = p2(:,inlierIndx);
-            
-        else
-            
-            % Dummy initialization of RANSAC variables
-            max_num_inliers_history = -1*ones(1,triangulationIterations);
-            
-            % Estimate the essential matrix E using the 8-point algorithm
-            E = estimateEssentialMatrix(p1_hom, p2_hom, K, K);
-            % Extract the relative camera positions (R,T) from the essential matrix
-            % Obtain extrinsic parameters (R,t) from E
-            [Rots,u3] = decomposeEssentialMatrix(E);
-            % Disambiguate among the four possible configurations
-            [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p1_hom,p2_hom,K,K);
-            % Triangulate a point cloud using the final transformation (R,T)
-            M1 = K*reshape(prevTriPose,3,4);
-            M2 = [[R_C2_W, T_C2_W];0,0,0,1]*[reshape(prevTriPose,3,4);0,0,0,1];
-            M2 = K*M2(1:3,1:4);
-        
-            
-            P = linearTriangulation(p1_hom,p2_hom,M1,M2); %[U;V]
-            
-            for ii = 1:triangulationIterations
+            p1_hom = [p1; ones(1,size(p1,2))];
+            p2_hom = [p2; ones(1,size(p2,2))];
 
-                % choose random data from landmarks
-                [~, idx] = datasample(P(1:3,:),triangulationSample,2,'Replace',false);
-                p1_sample = p1_hom(:,idx);
-                p2_sample = p2_hom(:,idx);
+            if (~triangulationRansac)
 
-                F_candidate = fundamentalEightPoint_normalized(p1_sample,p2_sample);
-
-                % calculate epipolar line distance
+                F_candidate = fundamentalEightPoint_normalized(p1_hom,p2_hom);
 
                 d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
+                inlierIndx = find(d<triangulationTolerance);
 
-                % all relevant elements on diagonal
-                inlierind = find(d < triangulationTolerance);
-                inliercount = length(inlierind);
+                % Estimate the essential matrix E using the 8-point algorithm
+                E = estimateEssentialMatrix(p1_hom, p2_hom, K, K);
+                % Extract the relative camera positions (R,T) from the essential matrix
+                % Obtain extrinsic parameters (R,t) from E
+                [Rots,u3] = decomposeEssentialMatrix(E);
+                % Disambiguate among the four possible configurations
+                [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p1_hom,p2_hom,K,K);
+                % Triangulate a point cloud using the final transformation (R,T)
+                M1 = K*reshape(prevTriPose,3,4);
+                M2 = [[R_C2_W, T_C2_W];0,0,0,1]*[reshape(prevTriPose,3,4);0,0,0,1];
+                M2 = K*M2(1:3,1:4);
 
-                if inliercount > max(max_num_inliers_history) && inliercount>=8
-                    max_num_inliers_history(ii) = inliercount;
-                    F_best = F_candidate;
-                elseif inliercount <= max(max_num_inliers_history)
-                    % set to previous value
-                    max_num_inliers_history(ii) = ...
-                        max_num_inliers_history(ii-1);
+                P = linearTriangulation(p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),M1,M2); %[U;V]
+                triangulated_keypoints = p2(:,inlierIndx);
+
+            else
+
+                % Dummy initialization of RANSAC variables
+                max_num_inliers_history = -1*ones(1,triangulationIterations);
+
+                % Estimate the essential matrix E using the 8-point algorithm
+                E = estimateEssentialMatrix(p1_hom, p2_hom, K, K);
+                % Extract the relative camera positions (R,T) from the essential matrix
+                % Obtain extrinsic parameters (R,t) from E
+                [Rots,u3] = decomposeEssentialMatrix(E);
+                % Disambiguate among the four possible configurations
+                [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p1_hom,p2_hom,K,K);
+                % Triangulate a point cloud using the final transformation (R,T)
+                M1 = K*reshape(prevTriPose,3,4);
+                M2 = [[R_C2_W, T_C2_W];0,0,0,1]*[reshape(prevTriPose,3,4);0,0,0,1];
+                M2 = K*M2(1:3,1:4);
+
+
+                P = linearTriangulation(p1_hom,p2_hom,M1,M2); %[U;V]
+
+                for ii = 1:triangulationIterations
+
+                    % choose random data from landmarks
+                    [~, idx] = datasample(P(1:3,:),triangulationSample,2,'Replace',false);
+                    p1_sample = p1_hom(:,idx);
+                    p2_sample = p2_hom(:,idx);
+
+                    F_candidate = fundamentalEightPoint_normalized(p1_sample,p2_sample);
+
+                    % calculate epipolar line distance
+
+                    d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
+
+                    % all relevant elements on diagonal
+                    inlierind = find(d < triangulationTolerance);
+                    inliercount = length(inlierind);
+
+                    if inliercount > max(max_num_inliers_history) && inliercount>=8
+                        max_num_inliers_history(ii) = inliercount;
+                        F_best = F_candidate;
+                    elseif inliercount <= max(max_num_inliers_history)
+                        % set to previous value
+                        max_num_inliers_history(ii) = ...
+                            max_num_inliers_history(ii-1);
+                    end
                 end
+
+                d = (epipolarLineDistance(F_best,p1_hom,p2_hom));
+                inlierIndx = find(d < triangulationTolerance);
+
+                % Estimate the essential matrix E using the 8-point algorithm
+                E = estimateEssentialMatrix(p1_hom(:,inlierIndx), p2_hom(:,inlierIndx), K, K);
+                % Extract the relative camera positions (R,T) from the essential matrix
+                % Obtain extrinsic parameters (R,t) from E
+                [Rots,u3] = decomposeEssentialMatrix(E);
+                % Disambiguate among the four possible configurations
+                [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),K,K);
+                % Triangulate a point cloud using the final transformation (R,T)
+                M1 = K*reshape(prevTriPose,3,4);
+                M2 = [[R_C2_W, T_C2_W];0,0,0,1]*[reshape(prevTriPose,3,4);0,0,0,1];
+                M2 = K*M2(1:3,1:4);
+
+                P = linearTriangulation(p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),M1,M2); %[U;V]
+                triangulated_keypoints = p2(:,inlierIndx);
+
             end
 
-            d = (epipolarLineDistance(F_best,p1_hom,p2_hom));
-            inlierIndx = find(d < triangulationTolerance);
-            
-            % Estimate the essential matrix E using the 8-point algorithm
-            E = estimateEssentialMatrix(p1_hom(:,inlierIndx), p2_hom(:,inlierIndx), K, K);
-            % Extract the relative camera positions (R,T) from the essential matrix
-            % Obtain extrinsic parameters (R,t) from E
-            [Rots,u3] = decomposeEssentialMatrix(E);
-            % Disambiguate among the four possible configurations
-            [R_C2_W,T_C2_W] = disambiguateRelativePose(Rots,u3,p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),K,K);
-            % Triangulate a point cloud using the final transformation (R,T)
-            M1 = K*reshape(prevTriPose,3,4);
-            M2 = [[R_C2_W, T_C2_W];0,0,0,1]*[reshape(prevTriPose,3,4);0,0,0,1];
-            M2 = K*M2(1:3,1:4);
-            
-            P = linearTriangulation(p1_hom(:,inlierIndx),p2_hom(:,inlierIndx),M1,M2); %[U;V]
-            triangulated_keypoints = p2(:,inlierIndx);
-            
+            disp([num2str(size(P,2)) ' New Triangulated points'])
+
+            %[V;U]
+            new_landmarks = [new_landmarks,...
+                [flipud(triangulated_keypoints);P(1:3,:)]];
         end
-
-        
-
-        showMatchedFeatures(prevImage, currImage, p1(:,inlierIndx)',p2(:,inlierIndx)')
-        disp([num2str(size(P,2)) ' New Triangulated points'])
-        %filter new points:
-         world_pose =-R_C_W'*t_C_W;
-        inFront = R_C_W(3,1:3)*(P(1:3,:)-world_pose) > 0;
-        
-        PosZmax = P(3,:) < world_pose(3)+min_dif(3);
-        PosYmax = P(2,:) < world_pose(2)+min_dif(2);
-        PosXmax = P(1,:) < world_pose(1)+min_dif(1);
-        
-        PosZmin = P(3,:) > world_pose(3)+max_dif(3);
-        PosYmin = P(2,:) > world_pose(2)+max_dif(2);
-        PosXmin = P(1,:) > world_pose(1)+max_dif(1);
-        Pos_count = PosZmax+PosYmax+PosXmax+PosZmin+PosYmin+PosXmin+inFront;
-        Pok = Pos_count==4;
-        P = P(:,Pok);
-
-        disp([num2str(size(P,2)) ' Tiangulated points within bounds'])
-        triangulated_keypoints = triangulated_keypoints(:,Pok);
-        
-        
-       
-        %[V;U]
-        new_landmarks = [new_landmarks,...
-            [flipud(triangulated_keypoints);P(1:3,:)]];
-    end
     
-
+    end
 
 % Add new Landmarks
 currState = [currState,new_landmarks];
+
+%filter new points:
+world_pose =-R_C_W'*t_C_W;
+inFront = R_C_W(3,1:3)*(currState(3:5,:)-world_pose) > 0;
+
+PosZmax = currState(5,:) < world_pose(3)+min_dif(3);
+PosYmax = currState(4,:) < world_pose(2)+min_dif(2);
+PosXmax = currState(3,:) < world_pose(1)+min_dif(1);
+
+PosZmin = currState(5,:) > world_pose(3)+max_dif(3);
+PosYmin = currState(4,:) > world_pose(2)+max_dif(2);
+PosXmin = currState(3,:) > world_pose(1)+max_dif(1);
+Pos_count = PosZmax+PosYmax+PosXmax+PosZmin+PosYmin+PosXmin+inFront;
+Pok = Pos_count==4;
+currState = currState(:,Pok);
+
+disp([num2str(size(currState,2)) ' landmarks currently being tracked'])
 
 % Clean up and add to data base
 if(isempty(emptyColumns))
@@ -329,6 +326,7 @@ else
     dataBase{3,min(emptyColumns)} = currPose(:); %12x1 pose
 end
     
+
 end
 
 
