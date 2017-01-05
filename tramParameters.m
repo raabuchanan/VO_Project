@@ -28,14 +28,14 @@ nonmaximum_supression_radius = 5;
 descriptor_radius = 9;
 % Matching parameter for harris corners, 
 % a higher number means more matches of lower quality
-match_lambda = 5;
+match_lambda = 4;
 % Pixel distance from epipolar line that is acceptable for
 % a newly triangulated landmark
 triangulationTolerance = 1;
 % Number of iterations to perform RANSAC for p3p pose estimation
 p3pIterations = 2000;
 % Pixel margin for p3p RANSAC
-p3pTolerance = 3;
+p3pTolerance = 2;
 % Number of sample points for p3p RANSAC
 p3pSample = 3;
 % Number of iterations to perform RANSAC for triangulating new points
