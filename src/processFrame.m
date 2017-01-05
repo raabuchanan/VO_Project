@@ -110,7 +110,7 @@ for i = 1:p3pIterations
 end
 
 if max_num_inliers == 0
-    disp(['Impossible to create new Pose']);
+    disp('Impossible to create new Pose');
 
      currState = [];
      currPose = [];
@@ -189,7 +189,7 @@ else
         p1 = flipud(matchedPrevTriKeypoints);
         p2 = flipud(matchedCurrTriKeypoints);
         
-        if size(p1,2)>=8
+        if size(p1,2)>=triangulationSample
             
             p1_hom = [p1; ones(1,size(p1,2))];
             p2_hom = [p2; ones(1,size(p2,2))];
@@ -262,12 +262,21 @@ else
                             max_num_inliers_history(ii-1);
                     end
                 end
-
-                d = (epipolarLineDistance(F_best,p1_hom,p2_hom));
+                
+                if exist('F_best','var')
+                    d = (epipolarLineDistance(F_best,p1_hom,p2_hom));
+                else
+                    F_candidate = fundamentalEightPoint_normalized(p1_hom,p2_hom);
+                    d = (epipolarLineDistance(F_candidate,p1_hom,p2_hom));
+                end
                 inlierIndx = find(d < triangulationTolerance);
 
                 % Estimate the essential matrix E using the 8-point algorithm
-                E = estimateEssentialMatrix(p1_hom(:,inlierIndx), p2_hom(:,inlierIndx), K, K);
+                if size(p1_hom(:,inlierIndx),2)>=8
+                    E = estimateEssentialMatrix(p1_hom(:,inlierIndx), p2_hom(:,inlierIndx), K, K);
+                else
+                    E = estimateEssentialMatrix(p1_hom, p2_hom, K, K);
+                end
                 % Extract the relative camera positions (R,T) from the essential matrix
                 % Obtain extrinsic parameters (R,t) from E
                 [Rots,u3] = decomposeEssentialMatrix(E);

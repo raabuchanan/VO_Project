@@ -19,7 +19,7 @@ global initializationIterations;
 disp('Initializing Automatically...')
 
     kitti_path = 'kitti';
-    malaga_path = 'malaga-urban-dataset-extract-07/';
+    malaga_path = 'malaga-urban-dataset-extract-07';
     parking_path = 'parking';
     tram_path = 'tram';
 
@@ -27,6 +27,9 @@ disp('Initializing Automatically...')
         img0 = imread([kitti_path '/00/image_0/' ...
             sprintf('%06d.png',1)]);
     elseif dataset == 1
+        images = dir([malaga_path ...
+    '/malaga-urban-dataset-extract-07_rectified_800x600_Images']);
+        left_images = images(3:2:end);
         img0 = rgb2gray(imread([malaga_path ...
             '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
             left_images(1).name]));

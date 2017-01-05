@@ -17,7 +17,7 @@ global dataBaseSize;
 %% set up relevant paths
 
 kitti_path = 'kitti';
-malaga_path = 'malaga-urban-dataset-extract-07/';
+malaga_path = 'malaga-urban-dataset-extract-07';
 parking_path = 'parking';
 tram_path = 'tram';
 
