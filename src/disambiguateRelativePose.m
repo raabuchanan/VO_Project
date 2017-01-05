@@ -50,5 +50,10 @@ for iRot = 1:2
     end
 end
 
+if ~exist('R','var')
+    R = Rots(:,:,1);
+    T = u3;
+end
+
 end
 

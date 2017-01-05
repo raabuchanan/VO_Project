@@ -139,7 +139,7 @@ for ii = 2:last_frame
     prevImage = currImage;
     
     if ii> 5
-    run Plot_all
+    run plotAll
     end
     
     % Makes sure that plots refresh.    
