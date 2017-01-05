@@ -115,20 +115,20 @@ end
 % 1 for ransac 'yes'
 ransac = 1;
 
- fprintf('\n\nProcessing frame %d\n=====================\n', bootstrap_frames(1));
+fprintf('\n\nProcessing frame %d\n=====================\n', bootstrap_frames(1));
 [firstKeypoints,firstLandmarks] = initializeVO(img0,img1,ransac,K,eye(3,4));
 
 prevImage = img1;
 prevState = [firstKeypoints;firstLandmarks(1:3,:)];
 
-figure
-set(gcf,'Position',[-1854 1 1855 1001])
-subplot(1, 3, 3); %uncomment to display images
-set(gcf, 'GraphicsSmoothing', 'on');
-view(0,0);
-axis equal;
-axis vis3d;
-axis([-15 15 -20 5 -20 30]);
+% figure
+% set(gcf,'Position',[-1854 1 1855 1001])
+% subplot(1, 3, 3); %uncomment to display images
+% set(gcf, 'GraphicsSmoothing', 'on');
+% view(0,0);
+% axis equal;
+% axis vis3d;
+% axis([-15 15 -20 5 -20 30]);
 
 
 %% Continuous operation
@@ -192,46 +192,50 @@ for i = 2:last_frame
     t_C_W = currPose(:,4);
 
     % Distinguish success from failure.
-    if (numel(R_C_W) > 0)
-               
-        subplot(1, 3, 3);
-        % plotCoordinateFrame(R_C_W', -R_C_W'*t_C_W, 2,['k';'k';'k']);
-        origin = -R_C_W'*t_C_W;
-        scatter3(origin(1),origin(2),origin(3),'k','filled','s');
-        hold on
-%         if (dataset==0)
-%             % Plot ground truth based on Dataset
-%             truePose = reshape(groundTruth(i+1, :), 4, 3)';
-%             rot = truePose(1:3,1:3);
-%             trans = truePose(:,4);
-%             plotCoordinateFrame(rot', rot*trans, 2,['b';'b';'b']);
-%             hold on    
+%    if (numel(R_C_W) > 0)
+        
+        
+        
+%         subplot(1, 3, 3);
+%         % plotCoordinateFrame(R_C_W', -R_C_W'*t_C_W, 2,['k';'k';'k']);
+%         origin = -R_C_W'*t_C_W;
+%         scatter3(origin(1),origin(2),origin(3),'k','filled','s');
+%         hold on
+% %         if (dataset==0)
+% %             % Plot ground truth based on Dataset
+% %             truePose = reshape(groundTruth(i+1, :), 4, 3)';
+% %             rot = truePose(1:3,1:3);
+% %             trans = truePose(:,4);
+% %             plotCoordinateFrame(rot', rot*trans, 2,['b';'b';'b']);
+% %             hold on    
+% %         end
+%         delete(findobj(gca, 'type', 'patch'));
+%         if(exist('currentLandmarks'))
+%             delete(currentLandmarks)
 %         end
-        delete(findobj(gca, 'type', 'patch'));
-        if(exist('currentLandmarks'))
-            delete(currentLandmarks)
-        end
-        
-        pos = -R_C_W'*t_C_W;
-        idx = ~ismember(currState(3:5,:)',prevState(3:5,:)','rows');
-        test = currState(3:5,idx);
-        currentLandmarks = scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
-        axis([pos(1)-25 pos(1)+25 pos(2)-20 pos(2)+5 pos(3)-10 pos(3)+30]);
-        view(0,0);
-        hold on
-        
-        subplot(1, 3, [1 2]);
-        imshow(currImage);
+%         
+%         pos = -R_C_W'*t_C_W;
+%         idx = ~ismember(currState(3:5,:)',prevState(3:5,:)','rows');
+%         test = currState(3:5,idx);
+%         currentLandmarks = scatter3(currState(3, :), currState(4, :), currState(5, :), 5,'r','filled');
+%         axis([pos(1)-25 pos(1)+25 pos(2)-20 pos(2)+5 pos(3)-10 pos(3)+30]);
+%         view(0,0);
+%         hold on
+%         
+%         subplot(1, 3, [1 2]);
+%         imshow(currImage);
         
         
        
         
-    else
-        disp(['Frame ' num2str(i) ' failed to localize!']);
-    end
+%    else
+%        disp(['Frame ' num2str(i) ' failed to localize!']);
+%    end
 
     prevState = currState;
     prevImage = currImage;
+    
+    plot_all
     
     % Makes sure that plots refresh.    
     drawnow
