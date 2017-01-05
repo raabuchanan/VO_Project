@@ -161,7 +161,7 @@ else
     % Loop through data base but not last frame
     for i=1:dataBaseLength
         
-        disp(['Frame being triangulated from segment ' num2str(i)]);
+        disp(['Frame being triangulated ' num2str(dataBaseLength - i + 1) ' frames ago']);
 
         %After first time
         prevTriKeypoints = dataBase{1,i};%%pull previous keypoints from tempstate [v;u]
@@ -283,9 +283,10 @@ else
 
             end
 
-            disp([num2str(size(P,2)) ' New Triangulated points'])
+            disp([num2str(size(P,2)) ' newly triangulated points'])
 
             %[V;U]
+            
             new_landmarks = [new_landmarks,...
                 [flipud(triangulated_keypoints);P(1:3,:)]];
         end

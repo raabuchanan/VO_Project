@@ -9,7 +9,7 @@ clc;
 %% initialize variables
 format shortG
 warning off
-dataset = 3; % 0: KITTI, 1: Malaga, 2: parking 3: tram
+dataset = 0; % 0: KITTI, 1: Malaga, 2: parking 3: tram
 tic
 %rng(1);
 global dataBaseSize;
@@ -22,9 +22,7 @@ parking_path = 'parking';
 tram_path = 'tram';
 
 % Necessary paths
-addpath(genpath('all_solns'))
 addpath(genpath('src'))
-addpath(genpath('testdata')) % here not necessary
 
 if dataset == 0
     run kittiParameters
@@ -35,7 +33,6 @@ if dataset == 0
     K = [7.188560000000e+02 0 6.071928000000e+02
         0 7.188560000000e+02 1.852157000000e+02
         0 0 1];
-    groundTruth = load('kitti/poses/00.txt');
     prevImage = imread([kitti_path '/00/image_0/' sprintf('%06d.png',1)]);
 elseif dataset == 1
     run malagaParameters

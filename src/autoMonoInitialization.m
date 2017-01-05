@@ -16,7 +16,7 @@ global triangulationTolerance;
 
 global initializationIterations;
 
-disp('Initializing')
+disp('Initializing Automatically...')
 
     kitti_path = 'kitti';
     malaga_path = 'malaga-urban-dataset-extract-07/';
@@ -236,7 +236,7 @@ end
         Pok = Pos_count==4;
         firstLandmarks = firstLandmarks(:,Pok);
 
-        disp([num2str(size(firstLandmarks,2)) ' Tiangulated points within bounds']) 
+        disp([num2str(size(firstLandmarks,2)) ' triangulated points within bounds']) 
         
         firstKeypoints = flipud(p1(1:2,Pok));
 

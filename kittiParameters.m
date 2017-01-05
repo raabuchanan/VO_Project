@@ -17,15 +17,15 @@ global min_dif;
 global triangulationRansac;
 
 % Size of Harris search patch
-harris_patch_size = 9;
+harris_patch_size = 11;
 % Magic number in range (0.04 to 0.15)
-harris_kappa = 0.07;
+harris_kappa = 0.08;
 % Number of harris corners to find
 num_keypoints = 2000;
 % Size of patch to suppress around keypoint
 nonmaximum_supression_radius = 5;
 % Size of harris descriptor
-descriptor_radius = 9;
+descriptor_radius = 11;
 % Matching parameter for harris corners, 
 % a higher number means more matches of lower quality
 match_lambda = 3;
@@ -39,7 +39,7 @@ p3pTolerance = 3;
 % Number of sample points for p3p RANSAC
 p3pSample = 3;
 % Number of iterations to perform RANSAC for triangulating new points
-triangulationIterations = 2000;
+triangulationIterations = 1000;
 % Number of iterations to perform RANSAC for initialization
 initializationIterations = 2000;
 % Number of sample points for triangulation
@@ -51,5 +51,5 @@ dataBaseSize = 3;
 max_dif = [ 0.5; 0.5; 0.5];
 min_dif = [-0.5; -0.5; -0.5];
 % Whether or not to use ransac for triangulating new landmarks
-triangulationRansac = false;
+triangulationRansac = true;
 

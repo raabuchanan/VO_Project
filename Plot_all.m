@@ -10,11 +10,17 @@ pos = -R_C_W'*t_C_W;
 Cursate_pos =  currState;
 
 subplot(4,6,[1,2,3,7,8,9])
-    imshow(currImage);    
+    if exist('imHandle')
+        delete(imHandle);
+    end
+    imHandle = imshow(currImage);    
     hold on;
     plot(currState(2, :),currState(1, :), 'gx', 'MarkerSize',3);
     if ~isempty(dataBase{1,end})
-        plot(dataBase{1,end}(2,:),dataBase{1,end}(1,:),'rx', 'MarkerSize',2);
+        if exist('keypointHandle')
+            delete(keypointHandle);
+        end
+        keypointHandle = plot(dataBase{1,end}(2,:),dataBase{1,end}(1,:),'rx', 'MarkerSize',2);
     end
   title('Keypoints(RED), Landmarks(GREEN)')
 
@@ -36,7 +42,7 @@ subplot(4,6,[1,2,3,7,8,9])
   
    
    subplot(4,6,[4,5,6,10,11,12,16,17,18,22,23,24])
-  plot(last20(1,:),last20(2,:), '-x','MarkerSize', 2) %plot last 20 positions
+  plot(smooth(last20(1,:),10),smooth(last20(2,:),10), '-x','MarkerSize', 2) %plot last 20 positions
   hold on
      scatter(Cursate_pos(3, :), Cursate_pos(5, :), 4, 'k');% plot currently tracked landmarks 
        set(gcf, 'GraphicsSmoothing', 'on');
@@ -60,7 +66,7 @@ subplot(4,6,[1,2,3,7,8,9])
             hold off
        %%%%%%%plot total trajectory
        subplot(4,6,[15,21])
-        plot(alltraj(1,:),alltraj(3,:), '-')
+        plot(smooth(alltraj(1,:),10),smooth(alltraj(3,:),10), '-')
         axis equal;
        title('Full Trajectory')
         
