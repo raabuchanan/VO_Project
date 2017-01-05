@@ -16,7 +16,7 @@ global triangulationTolerance;
 
 global initializationIterations;
 
-disp('Initializing')
+disp('Initializing...')
 
 %% establish keypoint correspondences between these two frames
 

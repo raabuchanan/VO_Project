@@ -52,7 +52,6 @@ if dataset == 0
     K = [7.188560000000e+02 0 6.071928000000e+02
         0 7.188560000000e+02 1.852157000000e+02
         0 0 1];
-    groundTruth = load('kitti/poses/00.txt');
     
 elseif dataset == 1
     run malagaParameters
@@ -84,7 +83,7 @@ end
 
 %% bootstrap / initialization of keypoint matching between adjacent frames
 
-bootstrap_frames = [99 101]; % first and third frame
+bootstrap_frames = [1 3]; % first and third frame
 % bootstrap_frames = [170 173];
 
 if dataset == 0
@@ -135,7 +134,7 @@ axis([-15 15 -20 5 -20 30]);
 %% Continuous operation
 range = 1:last_frame;
 dataBase = cell(3,dataBaseSize);
-for i = 100:last_frame
+for i = 2:last_frame
     fprintf('\n\nProcessing frame %d\n=====================\n', i);
     if dataset == 0
         currImage = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
