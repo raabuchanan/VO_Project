@@ -3,8 +3,6 @@ function [ currState, currPose, dataBase] = processFrame(...
 % prevState is a 5xk matrix where the columns corespond to 2D points on top
 % of the coresponding 3d points. k is the number of keypoints/landmarks
 
-addpath(genpath('../../all_solns'))
-
 global harris_patch_size;
 global harris_kappa;
 global num_keypoints;
@@ -299,7 +297,12 @@ currState = [currState,new_landmarks];
 
 %filter new points:
 world_pose =-R_C_W'*t_C_W;
-inFront = R_C_W(3,1:3)*(currState(3:5,:)-world_pose) > 0;
+
+%use in R2016b or later
+%inFront = R_C_W(3,1:3)*(currState(3:5,:)-world_pose) > 0;
+
+% use in R2016a or earlier
+inFront = R_C_W(3,1:3)*(currState(3:5,:)-repmat(world_pose, [1, size(currState,2)])) > 0;
 
 PosZmax = currState(5,:) < world_pose(3)+min_dif(3);
 PosYmax = currState(4,:) < world_pose(2)+min_dif(2);

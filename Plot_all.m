@@ -3,7 +3,7 @@
     %%%%%%%%%%%%%
     %%%plotting
   figure(1)
-  set(gcf, 'Position', get(0,'Screensize')); % Maximize figure. 
+  %set(gcf, 'Position', get(0,'Screensize')); % Maximize figure. 
   
 %    %%plot image with keypoints and landmarks
 pos = -R_C_W'*t_C_W;

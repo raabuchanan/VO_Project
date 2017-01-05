@@ -9,7 +9,7 @@ clc;
 %% initialize variables
 format shortG
 warning off
-dataset = 3; % 0: KITTI, 1: Malaga, 2: parking
+dataset = 3; % 0: KITTI, 1: Malaga, 2: parking 3: tram
 tic
 rng(1);
 global dataBaseSize;
