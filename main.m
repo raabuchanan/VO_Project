@@ -9,7 +9,7 @@ clc;
 %% initialize variables
 format shortG
 warning off
-dataset = 0; % 0: KITTI, 1: Malaga, 2: parking 3: tram
+dataset = 2; % 0: KITTI, 1: Malaga, 2: parking 3: tram
 tic
 %rng(1);
 global dataBaseSize;
@@ -36,6 +36,7 @@ if dataset == 0
         0 0 1];
     prevImage = imread([kitti_path '/00/image_0/' sprintf('%06d.png',1)]);
 elseif dataset == 1
+    videoName = 'malaga';
     run malagaParameters
     % Path containing the many files of Malaga 7.
     assert(exist(malaga_path) ~= 0);
@@ -50,7 +51,9 @@ elseif dataset == 1
             '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
             left_images(1).name]));
 elseif dataset == 2
-    run parkingParameters
+    videoName = 'parking';
+%     run parkingParameters
+    run parkingParametersFast
     last_frame = 598;
     K = load([parking_path '/K.txt']);
     ground_truth = load([parking_path '/poses.txt']);
@@ -58,6 +61,7 @@ elseif dataset == 2
     prevImage = rgb2gray(imread([parking_path ...
             sprintf('/images/img_%05d.png',1)]));
 elseif dataset == 3
+    videoName = 'tram';
     run tramParameters
     last_frame = 715;
     load([tram_path '/calibration/cameraParams.mat']);

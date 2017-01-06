@@ -163,9 +163,9 @@ end
         M1 = K*M1(1:3,1:4);
         P = linearTriangulation(p0,p1,M0,M1);
 
-        max_num_inliers_history = zeros(1,initializationIterations);
+        max_num_inliers_history = zeros(1,initializationIterations+1);
 
-        for ii = 1:initializationIterations
+        for ii = 2:initializationIterations
 
             % choose random data from landmarks
             [~, idx] = datasample(P(1:3,:),k,2,'Replace',false);
