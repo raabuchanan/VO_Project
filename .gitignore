@@ -4,3 +4,6 @@
 *.m~
 malaga-urban-dataset-extract-07
 tram
+*.mp4
+*.asv
+*.db

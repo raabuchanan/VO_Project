@@ -1,6 +1,6 @@
 
-figure(1)
-% set(gcf, 'Position', get(0,'Screensize')); % Maximize figure. 
+figure(1);
+set(gcf, 'Position', [50, 50, 1920, 1080]); % Maximize figure. 
 
 %    %%plot image with keypoints and landmarks
 pos = -R_C_W'*t_C_W;
@@ -76,7 +76,10 @@ hold on
 plot(framevec, num_trck, '-');
 title('Landmarks Tracked over Past Frames')
         
-        
-        
-       
+F = getframe(gcf);
+
+[X, Map] = frame2im(F);
+
+writeVideo(v,X)
+
         

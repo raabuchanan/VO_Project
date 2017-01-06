@@ -25,6 +25,7 @@ tram_path = 'tram';
 addpath(genpath('src'))
 
 if dataset == 0
+    videoName = 'kitti';
     run kittiParameters
     assert(exist(kitti_path) ~= 0);
     ground_truth = load([kitti_path '/poses/00.txt']);
@@ -66,6 +67,10 @@ elseif dataset == 3
 else
     assert(false);
 end
+
+v = VideoWriter(videoName,'MPEG-4');
+v.FrameRate = 5;
+open(v)
 
 %% bootstrap / initialization of keypoint matching between adjacent frames
 
@@ -148,3 +153,5 @@ for ii = 2:last_frame
 end
 
 toc
+close(v)
+
