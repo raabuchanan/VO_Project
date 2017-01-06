@@ -57,56 +57,58 @@ max_num_inliers_history = zeros(1, p3pIterations);
 max_num_inliers = 0;
 
 for i = 1:p3pIterations
-    [landmark_sample, idx] = datasample(matchedLandmarks, p3pSample, 2, 'Replace', false);
-    keypoint_sample = matchedCurrKeypoints(:, idx);
+    if(size(matchedLandmarks,2)>=p3pSample)
+        [landmark_sample, idx] = datasample(matchedLandmarks, p3pSample, 2, 'Replace', false);
+        keypoint_sample = matchedCurrKeypoints(:, idx);
 
 
-    normalized_bearings = K\[keypoint_sample; ones(1, 3)];
-    for ii = 1:3
-        normalized_bearings(:, ii) = normalized_bearings(:, ii) / ...
-            norm(normalized_bearings(:, ii), 2);
-    end
-    
-    poses = p3p(landmark_sample, normalized_bearings);
-    R_C_W_guess = zeros(3, 3, 2);
-    t_C_W_guess = zeros(3, 1, 2);
-    for ii = 0:1
-        R_W_C_ii = real(poses(:, (2+ii*4):(4+ii*4)));
-        t_W_C_ii = real(poses(:, (1+ii*4)));
-        R_C_W_guess(:,:,ii+1) = R_W_C_ii';
-        t_C_W_guess(:,:,ii+1) = -R_W_C_ii'*t_W_C_ii;
-    end
+        normalized_bearings = K\[keypoint_sample; ones(1, 3)];
+        for ii = 1:3
+            normalized_bearings(:, ii) = normalized_bearings(:, ii) / ...
+                norm(normalized_bearings(:, ii), 2);
+        end
 
-    
-    % Count inliers for guess 1
-    projected_points = projectPoints(...
-        (R_C_W_guess(:,:,1) * matchedLandmarks) + repmat(t_C_W_guess(:,:,1), ...
-        [1 size(matchedLandmarks, 2)]), K);
-    difference = matchedCurrKeypoints - projected_points;
-    errors = sum(difference.^2, 1);
-    inliers = errors < p3pTolerance^2;
-    guess = 1;
-    
-    % Count inliers for guess 2
-    projected_points = projectPoints(...
-        (R_C_W_guess(:,:,2) * matchedLandmarks) + repmat(t_C_W_guess(:,:,2), ...
-        [1 size(matchedLandmarks, 2)]), K);
-    difference = matchedCurrKeypoints - projected_points;
-    errors = sum(difference.^2, 1);
-    inliers_guess_2 = errors < p3pTolerance^2;
-    
-    if nnz(inliers_guess_2) > nnz(inliers)
-        inliers = inliers_guess_2;
-        guess = 2;
+        poses = p3p(landmark_sample, normalized_bearings);
+        R_C_W_guess = zeros(3, 3, 2);
+        t_C_W_guess = zeros(3, 1, 2);
+        for ii = 0:1
+            R_W_C_ii = real(poses(:, (2+ii*4):(4+ii*4)));
+            t_W_C_ii = real(poses(:, (1+ii*4)));
+            R_C_W_guess(:,:,ii+1) = R_W_C_ii';
+            t_C_W_guess(:,:,ii+1) = -R_W_C_ii'*t_W_C_ii;
+        end
+
+
+        % Count inliers for guess 1
+        projected_points = projectPoints(...
+            (R_C_W_guess(:,:,1) * matchedLandmarks) + repmat(t_C_W_guess(:,:,1), ...
+            [1 size(matchedLandmarks, 2)]), K);
+        difference = matchedCurrKeypoints - projected_points;
+        errors = sum(difference.^2, 1);
+        inliers = errors < p3pTolerance^2;
+        guess = 1;
+
+        % Count inliers for guess 2
+        projected_points = projectPoints(...
+            (R_C_W_guess(:,:,2) * matchedLandmarks) + repmat(t_C_W_guess(:,:,2), ...
+            [1 size(matchedLandmarks, 2)]), K);
+        difference = matchedCurrKeypoints - projected_points;
+        errors = sum(difference.^2, 1);
+        inliers_guess_2 = errors < p3pTolerance^2;
+
+        if nnz(inliers_guess_2) > nnz(inliers)
+            inliers = inliers_guess_2;
+            guess = 2;
+        end
+
+        if nnz(inliers) > max_num_inliers && nnz(inliers) >= 6
+            max_num_inliers = nnz(inliers);
+            best_R_C_W_guess = R_C_W_guess(:,:,guess);
+            best_T_C_W_guess = t_C_W_guess(:,:,guess);
+        end
+
+        max_num_inliers_history(i) = max_num_inliers;
     end
-    
-    if nnz(inliers) > max_num_inliers && nnz(inliers) >= 6
-        max_num_inliers = nnz(inliers);
-        best_R_C_W_guess = R_C_W_guess(:,:,guess);
-        best_T_C_W_guess = t_C_W_guess(:,:,guess);
-    end
-    
-    max_num_inliers_history(i) = max_num_inliers;
 end
 
 if max_num_inliers == 0
