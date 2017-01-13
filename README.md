@@ -5,7 +5,6 @@ Visual Odometry project for Vision Algorithms for Mobile Robotics
 
 Basic visual odometry pipeline which uses Harris corner detectors to match keypoints between frames. RANSAC is performed on the p3p algorithm to determine pose and new landmarks are continually triangulated. Current implemetation is fairly robust but extremly slow (~1hz on a powerful enough laptop.)
 
-![alt text](https://github.com/russellaabuchanan/VO_Project/kitti1000.png "KITTI Dataset")
 
 Datasets
 ------
@@ -15,3 +14,5 @@ The pipeline been tested with the following datasets:
 
 A Youtube video of the working pipeline at x10 speed is available here: https://youtu.be/0i2gmqZ2_mE
 Pose estimates have been smoothed over the last 10 frames.
+
+![](kitti1000.png?raw=true)
