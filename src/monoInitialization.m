@@ -107,9 +107,9 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
         M1 = K*M1(1:3,1:4);
         P = linearTriangulation(p0,p1,M0,M1);
 
-        max_num_inliers_history = zeros(1,initializationIterations);
+        max_num_inliers_history = zeros(1,initializationIterations+1);
 
-        for ii = 1:initializationIterations
+        for ii = 2:initializationIterations
 
             % choose random data from landmarks
             [~, idx] = datasample(P(1:3,:),k,2,'Replace',false);
@@ -165,7 +165,11 @@ p1 = [keypoint_matches1; ones(1,size(keypoint_matches1,2))];
         world_pose =-R_C_W'*t_C_W;
         max_dif = [ 0; 0; 0];
         min_dif = [0; 0; 0];
-        inFront = R_C_W(3,1:3)*(firstLandmarks(1:3,:)-world_pose) > 0;
+        %use in R2016b or later
+        %inFront = R_C_W(3,1:3)*(firstLandmarks(1:3,:)-world_pose) > 0;
+        
+        % use in R2016a or earlier
+        inFront = R_C_W(3,1:3)*(firstLandmarks(1:3,:)-repmat(world_pose, [1, size(firstLandmarks,2)])) > 0;
         
         PosZmax = firstLandmarks(3,:) < world_pose(3)+min_dif(3);
         PosYmax = firstLandmarks(2,:) < world_pose(2)+min_dif(2);

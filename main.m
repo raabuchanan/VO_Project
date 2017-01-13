@@ -11,22 +11,21 @@ format shortG
 warning off
 dataset = 0; % 0: KITTI, 1: Malaga, 2: parking
 tic
-rng(1);
+%rng(1);
 global dataBaseSize;
 
 %% set up relevant paths
 
 kitti_path = 'kitti';
-malaga_path = 'malaga-urban-dataset-extract-07/';
+malaga_path = 'malaga-urban-dataset-extract-07';
 parking_path = 'parking';
 tram_path = 'tram';
 
 % Necessary paths
-addpath(genpath('all_solns'))
 addpath(genpath('src'))
-addpath(genpath('testdata')) % here not necessary
 
 if dataset == 0
+    videoName = 'kitti';
     run kittiParameters
     assert(exist(kitti_path) ~= 0);
     ground_truth = load([kitti_path '/poses/00.txt']);
@@ -35,9 +34,9 @@ if dataset == 0
     K = [7.188560000000e+02 0 6.071928000000e+02
         0 7.188560000000e+02 1.852157000000e+02
         0 0 1];
-    groundTruth = load('kitti/poses/00.txt');
     prevImage = imread([kitti_path '/00/image_0/' sprintf('%06d.png',1)]);
 elseif dataset == 1
+    videoName = 'malaga';
     run malagaParameters
     % Path containing the many files of Malaga 7.
     assert(exist(malaga_path) ~= 0);
@@ -52,7 +51,9 @@ elseif dataset == 1
             '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
             left_images(1).name]));
 elseif dataset == 2
-    run parkingParameters
+    videoName = 'parking';
+%     run parkingParameters
+    run parkingParametersFast
     last_frame = 598;
     K = load([parking_path '/K.txt']);
     ground_truth = load([parking_path '/poses.txt']);
@@ -60,6 +61,7 @@ elseif dataset == 2
     prevImage = rgb2gray(imread([parking_path ...
             sprintf('/images/img_%05d.png',1)]));
 elseif dataset == 3
+    videoName = 'tram';
     run tramParameters
     last_frame = 715;
     load([tram_path '/calibration/cameraParams.mat']);
@@ -69,6 +71,10 @@ elseif dataset == 3
 else
     assert(false);
 end
+% Recording MPEG-4 is not possible on Linux
+v = VideoWriter(videoName,'MPEG-4');
+v.FrameRate = 5;
+open(v)
 
 %% bootstrap / initialization of keypoint matching between adjacent frames
 
@@ -142,7 +148,7 @@ for ii = 2:last_frame
     prevImage = currImage;
     
     if ii> 5
-    run Plot_all
+    run plotAll
     end
     
     % Makes sure that plots refresh.    
@@ -151,3 +157,5 @@ for ii = 2:last_frame
 end
 
 toc
+close(v)
+

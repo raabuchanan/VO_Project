@@ -16,10 +16,10 @@ global triangulationTolerance;
 
 global initializationIterations;
 
-disp('Initializing')
+disp('Initializing Automatically...')
 
     kitti_path = 'kitti';
-    malaga_path = 'malaga-urban-dataset-extract-07/';
+    malaga_path = 'malaga-urban-dataset-extract-07';
     parking_path = 'parking';
     tram_path = 'tram';
 
@@ -27,6 +27,9 @@ disp('Initializing')
         img0 = imread([kitti_path '/00/image_0/' ...
             sprintf('%06d.png',1)]);
     elseif dataset == 1
+        images = dir([malaga_path ...
+    '/malaga-urban-dataset-extract-07_rectified_800x600_Images']);
+        left_images = images(3:2:end);
         img0 = rgb2gray(imread([malaga_path ...
             '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
             left_images(1).name]));
@@ -160,9 +163,9 @@ end
         M1 = K*M1(1:3,1:4);
         P = linearTriangulation(p0,p1,M0,M1);
 
-        max_num_inliers_history = zeros(1,initializationIterations);
+        max_num_inliers_history = zeros(1,initializationIterations+1);
 
-        for ii = 1:initializationIterations
+        for ii = 2:initializationIterations
 
             % choose random data from landmarks
             [~, idx] = datasample(P(1:3,:),k,2,'Replace',false);
@@ -218,7 +221,12 @@ end
         world_pose =-R_C_W'*t_C_W;
         max_dif = [ 0; 0; 0];
         min_dif = [0; 0; 0];
-        inFront = R_C_W(3,1:3)*(firstLandmarks(1:3,:)-world_pose) > 0;
+        
+        %use in R2016b or later
+        %inFront = R_C_W(3,1:3)*(firstLandmarks(1:3,:)-world_pose) > 0;
+        
+        % use in R2016a or earlier
+        inFront = R_C_W(3,1:3)*(firstLandmarks(1:3,:)-repmat(world_pose, [1, size(firstLandmarks,2)])) > 0;
         
         PosZmax = firstLandmarks(3,:) < world_pose(3)+min_dif(3);
         PosYmax = firstLandmarks(2,:) < world_pose(2)+min_dif(2);
@@ -231,7 +239,7 @@ end
         Pok = Pos_count==4;
         firstLandmarks = firstLandmarks(:,Pok);
 
-        disp([num2str(size(firstLandmarks,2)) ' Tiangulated points within bounds']) 
+        disp([num2str(size(firstLandmarks,2)) ' triangulated points within bounds']) 
         
         firstKeypoints = flipud(p1(1:2,Pok));
 

@@ -5,3 +5,6 @@ kitti
 malaga-urban-dataset-extract-07
 parking
 tram
+*.mp4
+*.asv
+*.db
