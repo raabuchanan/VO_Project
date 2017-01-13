@@ -1,6 +1,7 @@
 *.mat
 *.txt
-*.png
 *.m~
+kitti
 malaga-urban-dataset-extract-07
+parking
 tram

@@ -1,5 +1,5 @@
 %%%%%%%%%% Mini Project: Vision Algorithms for Mobile Robotics %%%%%%%%%%%
-% by Alex Lieber, Carl Str�mbeck, Russell Buchanan, Maximilian Enthoven
+% by Alex Lieber, Carl Strömbeck, Russell Buchanan, Maximilian Enthoven
 % ETH Zurich / UZH, HS 2016
 
 %% Clearing workspaces, Closing windows & Clearing commandwindow
@@ -9,7 +9,7 @@ clc;
 %% initialize variables
 format shortG
 warning off
-dataset = 3; % 0: KITTI, 1: Malaga, 2: parking
+dataset = 0; % 0: KITTI, 1: Malaga, 2: parking
 tic
 rng(1);
 global dataBaseSize;
